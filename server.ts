@@ -9,6 +9,7 @@ import {
   generateTripItineraryAI,
   getAiConnectionStatus,
   negotiateGroupCompromiseAI,
+  optimizeTripBudgetAI,
 } from './src/server/ai.ts';
 import { db } from './src/server/db.ts';
 import { PROMPT_VERSIONS } from './src/server/prompts.ts';
@@ -347,18 +348,22 @@ export async function createAppServer() {
       const { accommodation, dailyTransport } =
         buildRecommendedAccommodationAndTransit({
           destination: trip.destination,
+          country: trip.country,
           centerLat: trip.centerLat,
           centerLng: trip.centerLng,
           daysCount: Math.max(1, days.length),
           personality: trip.personality,
           totalBudget: trip.totalBudget,
+          currency: trip.currency,
         });
       trip.accommodation = accommodation;
       trip.dailyTransport = dailyTransport;
       candidateDays = applyPersonalityProfileToDays(candidateDays, {
         destination: trip.destination,
+        country: trip.country,
         personality: trip.personality,
         totalBudget: trip.totalBudget,
+        currency: trip.currency,
         accommodationCost: accommodation.totalStayCost,
         transportCost: dailyTransport.totalTransportCost,
       });
@@ -526,6 +531,69 @@ export async function createAppServer() {
     });
     db.saveTrip(trip);
     return res.json({ trip });
+  });
+
+  // 6b. One-Click AI Budget Optimizer (Optimize Itinerary to Fit Budget)
+  app.post('/api/trips/:id/optimize-budget', async (req, res) => {
+    try {
+      const user = resolveUser(req);
+      const trip = db.getTripById(req.params.id);
+      if (!trip) return res.status(404).json({ error: 'Trip not found.' });
+
+      const verifiedPlaces = db.getVerifiedPlaces();
+      const optimized = await optimizeTripBudgetAI({
+        user,
+        trip,
+        verifiedPlaces,
+      });
+
+      trip.days = optimized.days;
+      if (optimized.accommodation) {
+        trip.accommodation = optimized.accommodation;
+      }
+      if (optimized.dailyTransport) {
+        trip.dailyTransport = optimized.dailyTransport;
+      }
+
+      trip.validation = validateTripSchedule({
+        days: trip.days,
+        totalBudget: trip.totalBudget,
+        currency: trip.currency,
+        personality: trip.personality,
+        verifiedPlaces,
+        accommodationCost: trip.accommodation?.totalStayCost ?? 0,
+        transportCost: trip.dailyTransport?.totalTransportCost ?? 0,
+      });
+
+      trip.chatHistory.push({
+        id: `msg-opt-${Date.now()}`,
+        sender: 'assistant' as const,
+        authorName: 'AI Trip Planner',
+        text: optimized.assistantReply,
+        timestamp: new Date().toISOString(),
+        diffSummary: optimized.diffSummary,
+        promptVersion: PROMPT_VERSIONS.chat_replan,
+      });
+
+      db.saveTrip(trip);
+      return res.json({
+        trip,
+        previousEstimate: optimized.previousEstimate,
+        newEstimate: optimized.newEstimate,
+        savedAmount: optimized.savedAmount,
+        diffSummary: optimized.diffSummary,
+        usedFallback: optimized.usedFallback,
+        aiLogs: db.getAiLogs(),
+        aiStatus: getAiConnectionStatus(),
+      });
+    } catch (err: any) {
+      const code = err?.statusCode || 500;
+      return res.status(code).json({
+        error: err?.message || 'Failed to optimize trip budget.',
+        aiLogs: db.getAiLogs(),
+        aiStatus: getAiConnectionStatus(),
+      });
+    }
   });
 
   // 7. UC6: Packing List Generation with Open-Meteo Weather API

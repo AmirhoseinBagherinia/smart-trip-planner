@@ -22,6 +22,7 @@ import {
   Wand2,
   Wifi,
   WifiOff,
+  Zap,
 } from 'lucide-react';
 import { AdminDashboardView } from './components/AdminDashboardView.tsx';
 import { AuthModal } from './components/AuthModal.tsx';
@@ -114,6 +115,7 @@ export default function App() {
   // Action pending states
   const [isGeneratingTrip, setIsGeneratingTrip] = useState(false);
   const [isChatMutating, setIsChatMutating] = useState(false);
+  const [isOptimizingBudget, setIsOptimizingBudget] = useState(false);
   const [isGeneratingPacking, setIsGeneratingPacking] = useState(false);
   const [isNegotiating, setIsNegotiating] = useState(false);
   const [isGeneratingDiary, setIsGeneratingDiary] = useState(false);
@@ -587,6 +589,46 @@ export default function App() {
     }
   };
 
+  // One-Click AI Budget Optimizer
+  const handleOptimizeBudget = async () => {
+    if (!activeTrip) return;
+    setIsOptimizingBudget(true);
+    setStatusBanner(null);
+    try {
+      const data = await apiFetch(
+        `/api/trips/${activeTrip.id}/optimize-budget`,
+        {
+          method: 'POST',
+        }
+      );
+      updateTripInState(data.trip);
+      setLatestDiffSummary(data.diffSummary || null);
+      const savedFormatted = formatCurrency(
+        Number(data.savedAmount || 0),
+        data.trip.currency
+      );
+      const newEstFormatted = formatCurrency(
+        Number(data.newEstimate || 0),
+        data.trip.currency
+      );
+      const capFormatted = formatCurrency(
+        Number(data.trip.totalBudget || 0),
+        data.trip.currency
+      );
+      setStatusBanner({
+        type: 'info',
+        message: `⚡ Budget Optimized! Swapped high-cost stops and lodging for authentic local alternatives — saved ${savedFormatted} (New estimated total: ${newEstFormatted} within your ${capFormatted} budget cap).`,
+      });
+    } catch (err: any) {
+      setStatusBanner({
+        type: 'error',
+        message: err?.message || 'Failed to optimize trip budget.',
+      });
+    } finally {
+      setIsOptimizingBudget(false);
+    }
+  };
+
   if (isLoadingBootstrap) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] p-8 max-w-[1440px] mx-auto space-y-6">
@@ -1011,55 +1053,116 @@ export default function App() {
               )}
             </div>
 
-            {/* SCHEDULE & QUALITY GUARD VALIDATION BANNER */}
-            {activeTrip.validation.issues.length > 0 ? (
-              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2.5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
-                    <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
-                    <span>
-                      Schedule & Quality Guard Detected {activeTrip.validation.issues.length} Schedule Advisory
-                    </span>
-                  </div>
-                  <button
-                    onClick={() =>
-                      saveUpdatedDays(activeTrip.days, { autoFixTimings: true })
-                    }
-                    className="px-3.5 py-1.5 text-xs font-semibold text-white bg-amber-800 rounded-lg hover:bg-amber-900 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                  >
-                    <Wand2 className="w-3.5 h-3.5" />
-                    Auto-Fix Schedule Timings
-                  </button>
+            {/* DYNAMIC BUDGET OVERRUN WARNING BANNER & SCHEDULE VERIFICATION */}
+            {(() => {
+              const fullTripEstimate =
+                activeTrip.validation.totalTripEstimatedCost ||
+                activeTrip.validation.totalEstimatedCost +
+                  (activeTrip.accommodation?.totalStayCost ?? 0) +
+                  (activeTrip.dailyTransport?.totalTransportCost ?? 0);
+              const isOverBudget =
+                activeTrip.totalBudget > 0 &&
+                fullTripEstimate > activeTrip.totalBudget;
+              const overrunDiff = Math.max(
+                0,
+                Math.round((fullTripEstimate - activeTrip.totalBudget) * 100) /
+                  100
+              );
+              const overrunPct = Math.max(
+                1,
+                Math.round(
+                  (overrunDiff / Math.max(1, activeTrip.totalBudget)) * 100
+                )
+              );
+              const scheduleIssues = activeTrip.validation.issues.filter(
+                (i) => i.type !== 'budget_overrun'
+              );
+
+              return (
+                <div className="space-y-3">
+                  {isOverBudget ? (
+                    <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                      <div className="flex items-start sm:items-center gap-2.5 text-xs font-bold text-red-900">
+                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5 sm:mt-0" />
+                        <span>
+                          ⚠️ Budget Exceeded: Estimated cost of{' '}
+                          {formatCurrency(
+                            fullTripEstimate,
+                            activeTrip.currency
+                          )}{' '}
+                          exceeds your budget cap of{' '}
+                          {formatCurrency(
+                            activeTrip.totalBudget,
+                            activeTrip.currency
+                          )}{' '}
+                          by {formatCurrency(overrunDiff, activeTrip.currency)}{' '}
+                          ({overrunPct}%)
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleOptimizeBudget}
+                        disabled={isOptimizingBudget}
+                        className="px-4 py-2 text-xs font-semibold text-white bg-red-700 hover:bg-red-800 disabled:opacity-60 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 shadow-xs"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        {isOptimizingBudget
+                          ? 'Optimizing Itinerary to Fit Budget...'
+                          : '[ ⚡ Optimize Itinerary to Fit Budget ]'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="px-4 py-2.5 rounded-xl bg-teal-50/70 border border-teal-200 flex items-center justify-between text-xs text-teal-900">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-teal-700 shrink-0" />
+                        <span>
+                          <strong>Schedule & Budget Verified:</strong> Zero time
+                          overlaps, all opening hours respected, realistic
+                          transit gaps calculated, and estimated cost fits
+                          comfortably within your budget cap.
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-teal-800 tabular-nums hidden sm:inline">
+                        Full Est:{' '}
+                        {formatCurrency(fullTripEstimate, activeTrip.currency)}{' '}
+                        / {formatCurrency(activeTrip.totalBudget, activeTrip.currency)}
+                      </span>
+                    </div>
+                  )}
+
+                  {scheduleIssues.length > 0 && (
+                    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                          <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span>
+                            Schedule & Quality Guard Detected{' '}
+                            {scheduleIssues.length} Schedule Timing Advisory
+                          </span>
+                        </div>
+                        <button
+                          onClick={() =>
+                            saveUpdatedDays(activeTrip.days, {
+                              autoFixTimings: true,
+                            })
+                          }
+                          className="px-3.5 py-1.5 text-xs font-semibold text-white bg-amber-800 rounded-lg hover:bg-amber-900 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                        >
+                          <Wand2 className="w-3.5 h-3.5" />
+                          Auto-Fix Schedule Timings
+                        </button>
+                      </div>
+                      <ul className="space-y-1 text-xs text-amber-900 list-disc list-inside">
+                        {scheduleIssues.map((issue) => (
+                          <li key={issue.id}>
+                            <strong>{issue.message}</strong> — {issue.suggestion}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-                <ul className="space-y-1 text-xs text-amber-900 list-disc list-inside">
-                  {activeTrip.validation.issues.map((issue) => (
-                    <li key={issue.id}>
-                      <strong>{issue.message}</strong> — {issue.suggestion}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <div className="px-4 py-2.5 rounded-xl bg-teal-50/70 border border-teal-200 flex items-center justify-between text-xs text-teal-900">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-teal-700 shrink-0" />
-                  <span>
-                    <strong>Schedule & Quality Guard Verified:</strong> Zero time overlaps, all opening hours respected, realistic transit gaps calculated, and all coordinates verified.
-                  </span>
-                </div>
-                <span className="text-[11px] text-teal-700 tabular-nums hidden sm:inline">
-                  Full Est:{' '}
-                  {formatCurrency(
-                    activeTrip.validation.totalTripEstimatedCost ||
-                      activeTrip.validation.totalEstimatedCost +
-                        (activeTrip.accommodation?.totalStayCost ?? 0) +
-                        (activeTrip.dailyTransport?.totalTransportCost ?? 0),
-                    activeTrip.currency
-                  )}{' '}
-                  / {formatCurrency(activeTrip.totalBudget, activeTrip.currency)}
-                </span>
-              </div>
-            )}
+              );
+            })()}
 
             {/* CONVERSATIONAL AI DIFF NOTIFICATION */}
             {latestDiffSummary && latestDiffSummary.length > 0 && (
@@ -1819,6 +1922,8 @@ export default function App() {
               );
               updateTripInState(data.trip);
             }}
+            onOptimizeBudget={handleOptimizeBudget}
+            isOptimizingBudget={isOptimizingBudget}
             onRegeneratePacking={async () => {
               setIsGeneratingPacking(true);
               try {

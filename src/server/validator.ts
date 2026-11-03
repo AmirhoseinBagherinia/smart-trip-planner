@@ -6,6 +6,7 @@ import {
   ValidationIssue,
   VerifiedPlace,
 } from '../types.ts';
+import { formatCurrency } from '../utils/currency.ts';
 
 /**
  * Calculates Haversine distance in kilometers between two geographic coordinates.
@@ -304,14 +305,6 @@ export function validateTripSchedule(params: {
     personality,
     verifiedPlaces,
   } = params;
-  const currencyMap: Record<string, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    TRY: '₺',
-    JPY: '¥',
-  };
-  const sym = currencyMap[currency.toUpperCase()] || `${currency} `;
   const issues: ValidationIssue[] = [];
   let totalEstimatedCost = 0;
   let totalStops = 0;
@@ -449,15 +442,20 @@ export function validateTripSchedule(params: {
     100;
 
   // 4. Check budget overrun against total trip budget
-  if (totalBudget > 0 && totalEstimatedCost > totalBudget) {
-    const overAmount = Math.round(totalEstimatedCost - totalBudget);
+  if (totalBudget > 0 && totalTripEstimatedCost > totalBudget) {
+    const overAmount =
+      Math.round((totalTripEstimatedCost - totalBudget) * 100) / 100;
+    const overPct = Math.max(
+      1,
+      Math.round(((totalTripEstimatedCost - totalBudget) / totalBudget) * 100)
+    );
     issues.push({
       id: 'budget-overrun-total',
       severity: 'warning',
       type: 'budget_overrun',
-      message: `Estimated itinerary stop costs (${sym}${Math.round(totalEstimatedCost).toLocaleString()}) exceed the trip budget (${sym}${totalBudget.toLocaleString()}) by ${sym}${overAmount.toLocaleString()}.`,
+      message: `Estimated cost of ${formatCurrency(totalTripEstimatedCost, currency)} exceeds your budget cap of ${formatCurrency(totalBudget, currency)} by ${formatCurrency(overAmount, currency)} (${overPct}%).`,
       suggestion:
-        'Use the "Reduce Budget by 20%" Smart Re-plan action or adjust expensive stops.',
+        'Click "⚡ Optimize Itinerary to Fit Budget" to swap high-cost stops and lodging for authentic budget-friendly local alternatives.',
     });
   }
 

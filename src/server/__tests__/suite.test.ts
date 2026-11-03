@@ -5,6 +5,7 @@ import {
 } from '../ai.ts';
 import { sanitizeUserInput } from '../prompts.ts';
 import {
+  applyDeterministicBudgetOptimization,
   applyDeterministicChatReplan,
   buildFallbackCityTemplate,
   createSeedTrips,
@@ -333,7 +334,99 @@ function runTestSuite() {
     passed++;
   }
 
-  console.log(`\nAll ${passed}/8 automated test suites passed!`);
+  // Test 9: Budget Overrun Warning & One-Click AI Budget Optimizer (IRT Tomans & EUR)
+  {
+    const sampleTrip = JSON.parse(JSON.stringify(createSeedTrips()[0]));
+    sampleTrip.destination = 'Shiraz';
+    sampleTrip.country = 'Iran';
+    sampleTrip.currency = 'IRT';
+    sampleTrip.totalBudget = 10000000; // 10,000,000 Tomans budget cap
+    sampleTrip.accommodation = {
+      name: 'Shiraz Grand Luxury Palace',
+      neighborhood: 'Zand Boulevard',
+      style: '5-Star Hotel',
+      nightlyRate: 1800000,
+      nights: 4,
+      totalStayCost: 7200000,
+      bookingNote: 'High-tier stay',
+      lat: 29.5918,
+      lng: 52.5837,
+    };
+    sampleTrip.dailyTransport = {
+      modeSummary: 'Private Chauffeur Sedan',
+      dailyCostPerDay: 450000,
+      totalTransportCost: 1800000,
+      notes: 'VIP transfers',
+    };
+    // Set stop costs to total 2,800,000 Tomans -> full trip estimate = 11,800,000 Tomans (18% overrun)
+    let stopIdx = 0;
+    for (const d of sampleTrip.days) {
+      for (const s of d.stops) {
+        s.estimatedCost = stopIdx === 0 ? 400000 : 160000;
+        stopIdx++;
+      }
+    }
+
+    const beforeValidation = validateTripSchedule({
+      days: sampleTrip.days,
+      totalBudget: sampleTrip.totalBudget,
+      currency: sampleTrip.currency,
+      personality: sampleTrip.personality,
+      verifiedPlaces: SEED_VERIFIED_PLACES,
+      accommodationCost: sampleTrip.accommodation.totalStayCost,
+      transportCost: sampleTrip.dailyTransport.totalTransportCost,
+    });
+
+    const overrunIssue = beforeValidation.issues.find(
+      (i) => i.type === 'budget_overrun'
+    );
+    assert.ok(
+      overrunIssue,
+      'Must detect budget_overrun when full trip estimate (11,800,000 Tomans) exceeds budget cap (10,000,000 Tomans)'
+    );
+    assert.ok(
+      overrunIssue.message.includes('Tomans') &&
+        overrunIssue.message.includes('18%'),
+      `Overrun message must format Tomans and percentage (got: ${overrunIssue.message})`
+    );
+
+    const optimized = applyDeterministicBudgetOptimization(
+      sampleTrip,
+      SEED_VERIFIED_PLACES
+    );
+    assert.equal(
+      optimized.days.length,
+      sampleTrip.days.length,
+      'Optimizer must keep all trip days intact'
+    );
+    assert.ok(
+      optimized.newEstimate <= sampleTrip.totalBudget,
+      `Optimized total (${optimized.newEstimate}) must fall comfortably within the ${sampleTrip.totalBudget} Tomans budget cap`
+    );
+    assert.ok(
+      optimized.savedAmount > 2000000,
+      `Optimizer must save >2,000,000 Tomans (saved ${optimized.savedAmount})`
+    );
+
+    const afterValidation = validateTripSchedule({
+      days: optimized.days,
+      totalBudget: sampleTrip.totalBudget,
+      currency: sampleTrip.currency,
+      personality: sampleTrip.personality,
+      verifiedPlaces: SEED_VERIFIED_PLACES,
+      accommodationCost: optimized.accommodation?.totalStayCost ?? 0,
+      transportCost: optimized.dailyTransport?.totalTransportCost ?? 0,
+    });
+    assert.ok(
+      !afterValidation.issues.some((i) => i.type === 'budget_overrun'),
+      'After optimization, budget_overrun issue must be completely resolved'
+    );
+
+    console.log('✓ [PASS] Test 9: Budget Overrun Warning & One-Click AI Budget Optimizer (11.8M -> <9M Tomans within 10M cap)');
+    passed++;
+  }
+
+  console.log(`\nAll ${passed}/9 automated test suites passed!`);
 }
 
 runTestSuite();

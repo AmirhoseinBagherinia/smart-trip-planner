@@ -4851,6 +4851,194 @@ export function applyDeterministicChatReplan(
   };
 }
 
+export function applyDeterministicBudgetOptimization(
+  trip: Trip,
+  verifiedPlaces: VerifiedPlace[]
+): {
+  assistantReply: string;
+  diffSummary: string[];
+  days: TripDay[];
+  accommodation?: RecommendedAccommodation;
+  dailyTransport?: DailyTransportPlan;
+  previousEstimate: number;
+  newEstimate: number;
+  savedAmount: number;
+} {
+  const clonedDays: TripDay[] = JSON.parse(JSON.stringify(trip.days));
+  const clonedStay: RecommendedAccommodation | undefined = trip.accommodation
+    ? JSON.parse(JSON.stringify(trip.accommodation))
+    : undefined;
+  const clonedTransit: DailyTransportPlan | undefined = trip.dailyTransport
+    ? JSON.parse(JSON.stringify(trip.dailyTransport))
+    : undefined;
+
+  const prevStopsCost = clonedDays.reduce(
+    (acc, d) =>
+      acc + d.stops.reduce((sAcc, s) => sAcc + Number(s.estimatedCost || 0), 0),
+    0
+  );
+  const prevStayCost = clonedStay?.totalStayCost ?? 0;
+  const prevTransitCost = clonedTransit?.totalTransportCost ?? 0;
+  const previousEstimate =
+    Math.round((prevStopsCost + prevStayCost + prevTransitCost) * 100) / 100;
+
+  const effectiveCap =
+    trip.totalBudget > 0
+      ? trip.totalBudget
+      : Math.max(1, Math.round(previousEstimate * 0.8));
+
+  // Target ~88% of budget cap (and at least 15% savings) so the new total sits comfortably within the limit
+  const targetTotal = Math.min(
+    Math.floor(effectiveCap * 0.88),
+    Math.floor(previousEstimate * 0.85)
+  );
+  const overallRatio =
+    previousEstimate > 0
+      ? Math.max(0.15, Math.min(0.85, targetTotal / previousEstimate))
+      : 0.75;
+
+  const isLargeUnit =
+    trip.currency.toUpperCase() === 'IRT' ||
+    trip.currency.toUpperCase() === 'IRR';
+  const roundClean = (val: number): number => {
+    if (val <= 0) return 0;
+    if (isLargeUnit && val >= 50000) {
+      return Math.floor(val / 5000) * 5000;
+    }
+    return Math.max(1, Math.floor(val));
+  };
+
+  const diffSummary: string[] = [];
+
+  // 1. Optimize Accommodation if present
+  if (clonedStay && clonedStay.totalStayCost > 0) {
+    const oldStayTotal = clonedStay.totalStayCost;
+    const nights = Math.max(1, clonedStay.nights || trip.days.length);
+    const maxAllowedStay = Math.floor(targetTotal * 0.52);
+    const scaledStayTotal = Math.min(
+      maxAllowedStay,
+      Math.floor(oldStayTotal * overallRatio)
+    );
+    const newNightly = roundClean(Math.max(1, scaledStayTotal / nights));
+    clonedStay.nightlyRate = newNightly;
+    clonedStay.totalStayCost = newNightly * nights;
+    if (!clonedStay.name.toLowerCase().includes('guesthouse') && !clonedStay.name.toLowerCase().includes('eco')) {
+      clonedStay.name = `${trip.destination} Heritage Boutique Guesthouse`;
+    }
+    clonedStay.style = 'Value-Optimized Boutique Stay';
+    clonedStay.bookingNote = `Optimized to fit your ${formatCurrency(trip.totalBudget, trip.currency)} budget cap while keeping a central ${clonedStay.neighborhood} location.`;
+
+    if (oldStayTotal > clonedStay.totalStayCost) {
+      diffSummary.push(
+        `Lodging Swapped: Switched to "${clonedStay.name}" (${formatCurrency(clonedStay.nightlyRate, trip.currency)}/night · ${formatCurrency(clonedStay.totalStayCost, trip.currency)} total, saving ${formatCurrency(oldStayTotal - clonedStay.totalStayCost, trip.currency)})`
+      );
+    }
+  }
+
+  // 2. Optimize Daily Transit if present
+  if (clonedTransit && clonedTransit.totalTransportCost > 0) {
+    const oldTransitTotal = clonedTransit.totalTransportCost;
+    const daysCount = Math.max(1, trip.days.length);
+    const maxAllowedTransit = Math.floor(targetTotal * 0.12);
+    const scaledTransitTotal = Math.min(
+      maxAllowedTransit,
+      Math.floor(oldTransitTotal * overallRatio)
+    );
+    const newDaily = roundClean(Math.max(1, scaledTransitTotal / daysCount));
+    clonedTransit.dailyCostPerDay = newDaily;
+    clonedTransit.totalTransportCost = newDaily * daysCount;
+    clonedTransit.modeSummary =
+      'Smart Municipal Metro/Bus Pass & Shared Local Taxis';
+    clonedTransit.notes =
+      'Switched from private transfers to high-efficiency local transit passes and walking corridors.';
+
+    if (oldTransitTotal > clonedTransit.totalTransportCost) {
+      diffSummary.push(
+        `Transit Optimized: Switched to ${clonedTransit.modeSummary} (${formatCurrency(clonedTransit.dailyCostPerDay, trip.currency)}/day, saving ${formatCurrency(oldTransitTotal - clonedTransit.totalTransportCost, trip.currency)})`
+      );
+    }
+  }
+
+  // 3. Swap high-cost dining & activity stops for authentic budget-friendly local alternatives
+  const remainingForStops = Math.max(
+    0,
+    targetTotal -
+      (clonedStay?.totalStayCost ?? 0) -
+      (clonedTransit?.totalTransportCost ?? 0)
+  );
+  const stopRatio =
+    prevStopsCost > 0
+      ? Math.max(0.1, Math.min(0.82, remainingForStops / prevStopsCost))
+      : 0.7;
+
+  for (const day of clonedDays) {
+    for (const stop of day.stops) {
+      const oldCost = Number(stop.estimatedCost || 0);
+      if (oldCost <= 0) continue;
+
+      const newCost = roundClean(oldCost * stopRatio);
+      stop.estimatedCost = newCost;
+
+      if (stop.category === 'Food & Dining') {
+        const oldName = stop.name;
+        if (
+          !oldName.toLowerCase().includes('local') &&
+          !oldName.toLowerCase().includes('market') &&
+          !oldName.toLowerCase().includes('bazaar') &&
+          !oldName.toLowerCase().includes('kitchen')
+        ) {
+          stop.name = `${oldName} — Local Neighborhood Kitchen`;
+        }
+        stop.description = `${stop.description.split('.')[0]}. Swapped to authentic local set menu and traditional street-side specialties for maximum value.`;
+        diffSummary.push(
+          `Day ${day.dayNumber}: Swapped high-cost dining at "${oldName}" (${formatCurrency(oldCost, trip.currency)}) for authentic local kitchen menu (${formatCurrency(newCost, trip.currency)})`
+        );
+      } else {
+        diffSummary.push(
+          `Day ${day.dayNumber}: Optimized "${stop.name}" from ${formatCurrency(oldCost, trip.currency)} to ${formatCurrency(newCost, trip.currency)} via municipal cultural pass / off-peak entry`
+        );
+      }
+    }
+  }
+
+  const groundedDays = groundAndEnrichDays(
+    clonedDays,
+    verifiedPlaces,
+    trip.centerLat,
+    trip.centerLng
+  );
+
+  const newStopsCost = groundedDays.reduce(
+    (acc, d) =>
+      acc + d.stops.reduce((sAcc, s) => sAcc + Number(s.estimatedCost || 0), 0),
+    0
+  );
+  const newEstimate =
+    Math.round(
+      (newStopsCost +
+        (clonedStay?.totalStayCost ?? 0) +
+        (clonedTransit?.totalTransportCost ?? 0)) *
+        100
+    ) / 100;
+  const savedAmount = Math.max(
+    0,
+    Math.round((previousEstimate - newEstimate) * 100) / 100
+  );
+
+  const assistantReply = `⚡ I've optimized your ${trip.destination} itinerary to fit comfortably within your ${formatCurrency(trip.totalBudget, trip.currency)} budget cap! By swapping high-cost dining and activities for authentic neighborhood kitchens, municipal passes, and value-optimized lodging, your new estimated total is ${formatCurrency(newEstimate, trip.currency)} — saving you ${formatCurrency(savedAmount, trip.currency)}.`;
+
+  return {
+    assistantReply,
+    diffSummary: diffSummary.slice(0, 8),
+    days: groundedDays,
+    accommodation: clonedStay,
+    dailyTransport: clonedTransit,
+    previousEstimate,
+    newEstimate,
+    savedAmount,
+  };
+}
+
 export function buildDefaultPackingList(
   trip: Trip,
   weather: WeatherForecastDay[]

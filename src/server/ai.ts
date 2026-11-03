@@ -31,6 +31,7 @@ import {
   TRAVEL_DIARY_RESPONSE_SCHEMA,
 } from './prompts.ts';
 import {
+  applyDeterministicBudgetOptimization,
   applyDeterministicChatReplan,
   buildDefaultCompromiseResult,
   buildDefaultDiaryStory,
@@ -858,6 +859,184 @@ export async function chatMutateItineraryAI(params: {
 
     return {
       ...fallback,
+      usedFallback: true,
+    };
+  }
+}
+
+export async function optimizeTripBudgetAI(params: {
+  user: User;
+  trip: Trip;
+  verifiedPlaces: VerifiedPlace[];
+}): Promise<{
+  assistantReply: string;
+  diffSummary: string[];
+  days: TripDay[];
+  accommodation?: RecommendedAccommodation;
+  dailyTransport?: DailyTransportPlan;
+  previousEstimate: number;
+  newEstimate: number;
+  savedAmount: number;
+  usedFallback: boolean;
+}> {
+  const prevStopsCost = params.trip.days.reduce(
+    (acc, d) =>
+      acc + d.stops.reduce((sAcc, s) => sAcc + Number(s.estimatedCost || 0), 0),
+    0
+  );
+  const previousEstimate =
+    Math.round(
+      (prevStopsCost +
+        (params.trip.accommodation?.totalStayCost ?? 0) +
+        (params.trip.dailyTransport?.totalTransportCost ?? 0)) *
+        100
+    ) / 100;
+
+  const optimizationPrompt = `Optimize this ${params.trip.destination} itinerary to fit comfortably within the total budget cap of ${formatCurrency(params.trip.totalBudget, params.trip.currency)} (current full trip estimate is ${formatCurrency(previousEstimate, params.trip.currency)}). Keep all days and ${params.trip.destination} intact, but swap high-cost stops/activities and expensive dining for realistic, high-quality, budget-friendly local alternatives in ${params.trip.destination}, and recalculate stop costs in ${params.trip.currency} so the total trip cost is well below ${formatCurrency(params.trip.totalBudget, params.trip.currency)}.`;
+
+  enforceUserAccess(
+    params.user,
+    'chat_replan',
+    PROMPT_VERSIONS.chat_replan,
+    optimizationPrompt
+  );
+
+  const startMs = Date.now();
+  const deterministic = applyDeterministicBudgetOptimization(
+    params.trip,
+    params.verifiedPlaces
+  );
+
+  try {
+    const prompt = buildChatReplanPrompt({
+      trip: params.trip,
+      userMessage: optimizationPrompt,
+      verifiedPlaces: params.verifiedPlaces,
+    });
+
+    const { data, modelUsed, estimatedTokens } = await callGeminiStructured<{
+      assistantReply: string;
+      diffSummary: string[];
+      days: any[];
+    }>({
+      systemInstruction: prompt.systemInstruction,
+      contents: prompt.contents,
+      responseSchema: CHAT_REPLAN_RESPONSE_SCHEMA,
+    });
+
+    // Merge AI stop names/descriptions with guaranteed budget-compliant cost ceiling
+    const mergedDays: TripDay[] = deterministic.days.map((detDay, dayIdx) => {
+      const aiDay = (data.days || [])[dayIdx];
+      if (!aiDay || !Array.isArray(aiDay.stops)) return detDay;
+      return {
+        ...detDay,
+        title: aiDay.title || detDay.title,
+        stops: detDay.stops.map((detStop, stopIdx) => {
+          const aiStop = aiDay.stops[stopIdx];
+          if (!aiStop) return detStop;
+          const aiCost = Number(aiStop.estimatedCost ?? detStop.estimatedCost);
+          return {
+            ...detStop,
+            name: aiStop.name || detStop.name,
+            description: aiStop.description || detStop.description,
+            category: aiStop.category || detStop.category,
+            estimatedCost: Math.min(
+              detStop.estimatedCost,
+              aiCost > 0 ? aiCost : detStop.estimatedCost
+            ),
+          };
+        }),
+      };
+    });
+
+    const grounded = groundAndEnrichDays(
+      mergedDays,
+      params.verifiedPlaces,
+      params.trip.centerLat,
+      params.trip.centerLng
+    );
+
+    const newStopsCost = grounded.reduce(
+      (acc, d) =>
+        acc +
+        d.stops.reduce((sAcc, s) => sAcc + Number(s.estimatedCost || 0), 0),
+      0
+    );
+    const newEstimate =
+      Math.round(
+        (newStopsCost +
+          (deterministic.accommodation?.totalStayCost ?? 0) +
+          (deterministic.dailyTransport?.totalTransportCost ?? 0)) *
+          100
+      ) / 100;
+    const savedAmount = Math.max(
+      0,
+      Math.round((previousEstimate - newEstimate) * 100) / 100
+    );
+
+    const validation = validateTripSchedule({
+      days: grounded,
+      totalBudget: params.trip.totalBudget,
+      currency: params.trip.currency,
+      personality: params.trip.personality,
+      verifiedPlaces: params.verifiedPlaces,
+      accommodationCost: deterministic.accommodation?.totalStayCost ?? 0,
+      transportCost: deterministic.dailyTransport?.totalTransportCost ?? 0,
+    });
+
+    db.addAiLog({
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      userId: params.user.id,
+      userName: params.user.name,
+      feature: 'chat_replan',
+      model: modelUsed,
+      promptVersion: PROMPT_VERSIONS.chat_replan,
+      latencyMs: Date.now() - startMs,
+      estimatedTokens,
+      estimatedCostUsd: Number((estimatedTokens * 0.00000075).toFixed(5)),
+      validationPassed: validation.isValid,
+      validationIssueCount: validation.issues.length,
+      status: 'success',
+      promptSnippet: `Optimize Budget: saved ${formatCurrency(savedAmount, params.trip.currency)}`,
+    });
+
+    return {
+      assistantReply:
+        data.assistantReply || deterministic.assistantReply,
+      diffSummary:
+        data.diffSummary && data.diffSummary.length > 0
+          ? data.diffSummary
+          : deterministic.diffSummary,
+      days: grounded,
+      accommodation: deterministic.accommodation,
+      dailyTransport: deterministic.dailyTransport,
+      previousEstimate,
+      newEstimate,
+      savedAmount,
+      usedFallback: false,
+    };
+  } catch (err: any) {
+    db.addAiLog({
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      userId: params.user.id,
+      userName: params.user.name,
+      feature: 'chat_replan',
+      model: connectionState.activeModel,
+      promptVersion: PROMPT_VERSIONS.chat_replan,
+      latencyMs: Date.now() - startMs,
+      estimatedTokens: 0,
+      estimatedCostUsd: 0,
+      validationPassed: true,
+      validationIssueCount: 0,
+      status: 'fallback',
+      promptSnippet: `Optimize Budget: saved ${formatCurrency(deterministic.savedAmount, params.trip.currency)}`,
+      notes: `Applied smart budget optimizer (${String(err?.message || '').slice(0, 60)})`,
+    });
+
+    return {
+      ...deterministic,
       usedFallback: true,
     };
   }

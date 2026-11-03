@@ -9,6 +9,8 @@ import {
   Sun,
   Trash2,
   AlertTriangle,
+  Zap,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   ExpenseCategory,
@@ -32,6 +34,8 @@ interface BudgetPackingViewProps {
   }) => Promise<void>;
   onDeleteExpense: (expenseId: string) => Promise<void>;
   onUpdateTotalBudget: (newBudget: number) => Promise<void>;
+  onOptimizeBudget?: () => Promise<void>;
+  isOptimizingBudget?: boolean;
   onRegeneratePacking: () => Promise<void>;
   onUpdatePackingList: (items: PackingItem[]) => Promise<void>;
   isGeneratingPacking: boolean;
@@ -59,6 +63,8 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
   onAddExpense,
   onDeleteExpense,
   onUpdateTotalBudget,
+  onOptimizeBudget,
+  isOptimizingBudget = false,
   onRegeneratePacking,
   onUpdatePackingList,
   isGeneratingPacking,
@@ -136,10 +142,49 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
     0
   );
   const remainingBudget = trip.totalBudget - totalActualSpent;
-  const spentPercentage = Math.min(
-    100,
-    Math.round((totalActualSpent / Math.max(1, trip.totalBudget)) * 100)
+  const spentPercentage = Math.round(
+    (totalActualSpent / Math.max(1, trip.totalBudget)) * 100
   );
+
+  const isEstimateOverBudget =
+    trip.totalBudget > 0 && totalFullTripEstimate > trip.totalBudget;
+  const isActualOverBudget =
+    trip.totalBudget > 0 && totalActualSpent > trip.totalBudget;
+  const isAnyOverBudget = isEstimateOverBudget || isActualOverBudget;
+
+  const estimatedUtilizationPct = Math.round(
+    (totalFullTripEstimate / Math.max(1, trip.totalBudget)) * 100
+  );
+  const highestUtilizationPct = Math.max(
+    estimatedUtilizationPct,
+    spentPercentage
+  );
+  const overrunDifference = Math.max(
+    0,
+    Math.round((totalFullTripEstimate - trip.totalBudget) * 100) / 100
+  );
+  const overrunPercentage = Math.max(
+    1,
+    Math.round(
+      ((totalFullTripEstimate - trip.totalBudget) /
+        Math.max(1, trip.totalBudget)) *
+        100
+    )
+  );
+
+  // Identify top categories pushing cost over the limit when over budget
+  const sortedCategoriesByLoad = [...EXPENSE_CATEGORIES].sort((a, b) => {
+    const loadA = Math.max(estimatedByCategory[a] || 0, actualByCategory[a] || 0);
+    const loadB = Math.max(estimatedByCategory[b] || 0, actualByCategory[b] || 0);
+    return loadB - loadA;
+  });
+  const topOverrunCategories = isAnyOverBudget
+    ? sortedCategoriesByLoad.slice(0, 2).filter(
+        (cat) =>
+          Math.max(estimatedByCategory[cat] || 0, actualByCategory[cat] || 0) >
+          trip.totalBudget * 0.2
+      )
+    : [];
 
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,7 +266,19 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {isEstimateOverBudget && onOptimizeBudget && (
+              <button
+                onClick={onOptimizeBudget}
+                disabled={isOptimizingBudget}
+                className="px-3.5 py-2 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 disabled:opacity-60 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 shadow-xs"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                {isOptimizingBudget
+                  ? 'Optimizing Itinerary to Fit Budget...'
+                  : '⚡ Optimize Itinerary to Fit Budget'}
+              </button>
+            )}
             {editingBudget ? (
               <div className="flex items-center gap-2">
                 <input
@@ -229,7 +286,7 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
                   min={50}
                   value={budgetInput}
                   onChange={(e) => setBudgetInput(e.target.value)}
-                  className="w-28 px-3 py-1.5 text-sm border border-slate-300 rounded-lg tabular-nums"
+                  className="w-32 px-3 py-1.5 text-sm border border-slate-300 rounded-lg tabular-nums"
                 />
                 <button
                   onClick={handleSaveBudget}
@@ -258,6 +315,110 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
           </div>
         </div>
 
+        {/* Dynamic Budget Verification / Overrun Banner */}
+        <div className="pt-5">
+          {isEstimateOverBudget ? (
+            <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-red-900">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>
+                    ⚠️ Budget Exceeded: Estimated cost of{' '}
+                    {formatCurrency(totalFullTripEstimate, trip.currency)} exceeds
+                    your budget cap of{' '}
+                    {formatCurrency(trip.totalBudget, trip.currency)} by{' '}
+                    {formatCurrency(overrunDifference, trip.currency)} (
+                    {overrunPercentage}%)
+                  </span>
+                </div>
+                {topOverrunCategories.length > 0 && (
+                  <div className="text-xs text-red-800 pl-6">
+                    Primary categories pushing cost over limit:{' '}
+                    <strong>
+                      {topOverrunCategories
+                        .map(
+                          (c) =>
+                            `${c} (${formatCurrency(
+                              Math.max(
+                                estimatedByCategory[c] || 0,
+                                actualByCategory[c] || 0
+                              ),
+                              trip.currency
+                            )})`
+                        )
+                        .join(' & ')}
+                    </strong>
+                    .
+                  </div>
+                )}
+              </div>
+              {onOptimizeBudget && (
+                <button
+                  onClick={onOptimizeBudget}
+                  disabled={isOptimizingBudget}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-red-700 hover:bg-red-800 disabled:opacity-60 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  {isOptimizingBudget
+                    ? 'Optimizing Itinerary...'
+                    : '[ ⚡ Optimize Itinerary to Fit Budget ]'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="px-4 py-3 rounded-xl bg-teal-50/70 border border-teal-200 flex flex-wrap items-center justify-between gap-2 text-xs text-teal-900">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-teal-700 shrink-0" />
+                <span>
+                  <strong>Schedule & Budget Verified:</strong> Estimated total of{' '}
+                  {formatCurrency(totalFullTripEstimate, trip.currency)} fits
+                  within your {formatCurrency(trip.totalBudget, trip.currency)}{' '}
+                  budget cap ({estimatedUtilizationPct}% utilized).
+                </span>
+              </div>
+              <span className="font-mono font-semibold text-teal-800 tabular-nums">
+                Surplus:{' '}
+                {formatCurrency(
+                  Math.max(0, trip.totalBudget - totalFullTripEstimate),
+                  trip.currency
+                )}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Overall Budget Utilization Progress Bar */}
+        <div className="pt-4 pb-2 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-slate-800">
+              Overall Trip Budget Utilization (Estimated vs. Cap)
+            </span>
+            <span
+              className={`font-mono font-bold tabular-nums px-2 py-0.5 rounded ${
+                highestUtilizationPct > 100
+                  ? 'bg-red-100 text-red-800'
+                  : highestUtilizationPct > 85
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-teal-100 text-teal-800'
+              }`}
+            >
+              {highestUtilizationPct}% of {formatCurrency(trip.totalBudget, trip.currency)}
+            </span>
+          </div>
+          <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200/70">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                highestUtilizationPct > 100
+                  ? 'bg-gradient-to-r from-amber-500 to-red-600'
+                  : highestUtilizationPct > 85
+                    ? 'bg-amber-500'
+                    : 'bg-teal-700'
+              }`}
+              style={{ width: `${Math.min(100, highestUtilizationPct)}%` }}
+            />
+          </div>
+        </div>
+
         {/* 4-Column Metric Strip */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 py-6 border-b border-slate-200">
           <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80">
@@ -272,11 +433,21 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
             </div>
           </div>
 
-          <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80">
+          <div
+            className={`p-4 rounded-lg border ${
+              isEstimateOverBudget
+                ? 'bg-red-50/60 border-red-200'
+                : 'bg-slate-50 border-slate-200/80'
+            }`}
+          >
             <div className="text-xs text-slate-500 font-medium">
               Full Trip Estimate (Stay + Transit + Stops)
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+            <div
+              className={`text-2xl font-bold mt-1 tabular-nums ${
+                isEstimateOverBudget ? 'text-red-700' : 'text-slate-900'
+              }`}
+            >
               {formatCurrency(totalFullTripEstimate, trip.currency)}
             </div>
             <div className="text-xs text-slate-500 mt-1 tabular-nums">
@@ -288,7 +459,11 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
             <div className="text-xs text-slate-500 font-medium">
               Actual Logged Spending
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+            <div
+              className={`text-2xl font-bold mt-1 tabular-nums ${
+                isActualOverBudget ? 'text-red-700' : 'text-slate-900'
+              }`}
+            >
               {formatCurrency(totalActualSpent, trip.currency)}
             </div>
             <div className="text-xs text-slate-500 mt-1 tabular-nums">
@@ -298,19 +473,28 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
 
           <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80">
             <div className="text-xs text-slate-500 font-medium">
-              Remaining Balance
+              Remaining Balance (vs. Estimate)
             </div>
             <div
               className={`text-2xl font-bold mt-1 tabular-nums ${
-                remainingBudget < 0 ? 'text-red-600' : 'text-teal-700'
+                trip.totalBudget - totalFullTripEstimate < 0 || remainingBudget < 0
+                  ? 'text-red-600'
+                  : 'text-teal-700'
               }`}
             >
-              {formatCurrency(remainingBudget, trip.currency)}
+              {formatCurrency(
+                isEstimateOverBudget
+                  ? trip.totalBudget - totalFullTripEstimate
+                  : remainingBudget,
+                trip.currency
+              )}
             </div>
             <div className="text-xs text-slate-500 mt-1 tabular-nums">
-              {remainingBudget < 0
-                ? 'Over budget threshold'
-                : `${formatCurrency(Math.round(remainingBudget / Math.max(1, trip.days.length)), trip.currency)}/day remaining`}
+              {isEstimateOverBudget
+                ? `Exceeds budget by ${formatCurrency(overrunDifference, trip.currency)}`
+                : remainingBudget < 0
+                  ? 'Over budget threshold'
+                  : `${formatCurrency(Math.round((trip.totalBudget - totalFullTripEstimate) / Math.max(1, trip.days.length)), trip.currency)}/day buffer`}
             </div>
           </div>
         </div>
@@ -361,7 +545,7 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
           <div className="mt-4 p-3.5 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3 text-xs text-red-800">
             <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
             <span>
-              <strong>Budget Alert:</strong> Logged expenses exceed your {formatCurrency(trip.totalBudget, trip.currency)} target by {formatCurrency(Math.abs(remainingBudget), trip.currency)}. Consider increasing the budget cap or using the AI Planner’s "Reduce Budget by 20%" action.
+              <strong>Logged Expenses Alert:</strong> Logged expenses exceed your {formatCurrency(trip.totalBudget, trip.currency)} target by {formatCurrency(Math.abs(remainingBudget), trip.currency)}.
             </span>
           </div>
         )}
@@ -377,30 +561,76 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
               {EXPENSE_CATEGORIES.map((cat) => {
                 const est = estimatedByCategory[cat] || 0;
                 const act = actualByCategory[cat] || 0;
-                const maxRef = Math.max(est, act, 100);
-                const estPct = Math.min(100, Math.round((est / maxRef) * 100));
-                const actPct = Math.min(100, Math.round((act / maxRef) * 100));
+                const catLoad = Math.max(est, act);
+                const shareOfTotalBudgetPct = Math.round(
+                  (catLoad / Math.max(1, trip.totalBudget)) * 100
+                );
+                const isOverrunDriver =
+                  topOverrunCategories.includes(cat) ||
+                  (act > est && est > 0) ||
+                  shareOfTotalBudgetPct > 55;
+                const barWidthPct = Math.min(
+                  100,
+                  Math.max(4, shareOfTotalBudgetPct)
+                );
 
                 return (
-                  <div key={cat} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-slate-800">{cat}</span>
+                  <div
+                    key={cat}
+                    className={`p-3 rounded-lg border space-y-1.5 ${
+                      isOverrunDriver && isAnyOverBudget
+                        ? 'bg-red-50/50 border-red-200'
+                        : 'bg-slate-50/50 border-slate-200/70'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900">
+                          {cat}
+                        </span>
+                        {isOverrunDriver && isAnyOverBudget && (
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-red-100 text-red-800 rounded">
+                            ⚠️ Pushing Over Limit ({shareOfTotalBudgetPct}% of budget)
+                          </span>
+                        )}
+                      </div>
                       <span className="text-slate-600 tabular-nums">
-                        Est: {formatCurrency(est, trip.currency)} · Actual:{' '}
+                        Est:{' '}
+                        <strong
+                          className={
+                            isOverrunDriver && isAnyOverBudget
+                              ? 'text-red-700'
+                              : 'text-slate-900'
+                          }
+                        >
+                          {formatCurrency(est, trip.currency)}
+                        </strong>{' '}
+                        · Actual:{' '}
                         <strong className="text-slate-900">
                           {formatCurrency(act, trip.currency)}
                         </strong>
                       </span>
                     </div>
-                    <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex flex-col gap-0.5">
+                    <div className="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-teal-700 rounded-full transition-all"
-                        style={{ width: `${actPct}%` }}
-                        title={`Actual: ${formatCurrency(act, trip.currency)}`}
+                        className={`h-full rounded-full transition-all ${
+                          isOverrunDriver && isAnyOverBudget
+                            ? 'bg-gradient-to-r from-amber-500 to-red-600'
+                            : 'bg-teal-700'
+                        }`}
+                        style={{ width: `${barWidthPct}%` }}
+                        title={`${cat}: ${formatCurrency(catLoad, trip.currency)} (${shareOfTotalBudgetPct}% of total budget)`}
                       />
                     </div>
-                    <div className="text-[11px] text-slate-400 tabular-nums">
-                      Planned allocation reference: {estPct}% ({formatCurrency(est, trip.currency)})
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 tabular-nums">
+                      <span>
+                        Share of {formatCurrency(trip.totalBudget, trip.currency)} budget cap: {shareOfTotalBudgetPct}%
+                      </span>
+                      {act > 0 && (
+                        <span>
+                          Logged: {formatCurrency(act, trip.currency)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
