@@ -234,11 +234,75 @@ function runTestSuite() {
       '€4,000',
       'EUR currency must format with € symbol'
     );
+    assert.equal(
+      formatCurrency(2500000, 'IRT'),
+      '2,500,000 Tomans',
+      'IRT currency must format with Tomans suffix'
+    );
+    assert.equal(
+      formatCurrency(25000000, 'IRR'),
+      '25,000,000 Rials',
+      'IRR currency must format with Rials suffix'
+    );
     console.log('✓ [PASS] Test 7: Travel Personality Engine (Luxury vs Backpacker vs Slow Traveler), Accommodation, Transit & Dynamic Currency');
     passed++;
   }
 
-  console.log(`\nAll ${passed}/7 automated test suites passed!`);
+  // Test 8: Hyper-Local Purchasing Power Grounding & Budget Surplus Note (Dehdasht, Iran — €800 Budget)
+  {
+    const dehdashtTrip = buildFallbackCityTemplate({
+      destination: 'Dehdasht',
+      startDate: '2026-11-12',
+      daysCount: 2,
+      personality: 'Foodie',
+      totalBudget: 800,
+      currency: 'EUR',
+      verifiedPlaces: SEED_VERIFIED_PLACES,
+    });
+
+    assert.equal(dehdashtTrip.country, 'Iran', 'Dehdasht country must be Iran');
+    assert.ok(
+      Math.abs(dehdashtTrip.centerLat - 30.7936) < 0.05 &&
+        Math.abs(dehdashtTrip.centerLng - 50.5647) < 0.05,
+      `Dehdasht coordinates must be ~30.7936, 50.5647 (got ${dehdashtTrip.centerLat}, ${dehdashtTrip.centerLng})`
+    );
+    assert.ok(
+      dehdashtTrip.accommodation.nightlyRate >= 15 &&
+        dehdashtTrip.accommodation.nightlyRate <= 35,
+      `Dehdasht eco-lodge nightly rate must be €15–€35/night, got €${dehdashtTrip.accommodation.nightlyRate}`
+    );
+    assert.ok(
+      dehdashtTrip.dailyTransport.dailyCostPerDay >= 3 &&
+        dehdashtTrip.dailyTransport.dailyCostPerDay <= 8,
+      `Dehdasht daily transit must be €3–€8/day, got €${dehdashtTrip.dailyTransport.dailyCostPerDay}`
+    );
+
+    const allStops = dehdashtTrip.days.flatMap((d) => d.stops);
+    assert.ok(
+      allStops.some((s) => s.name.toLowerCase().includes('belqeys')),
+      'Dehdasht itinerary must include Belqeys Historical Old Town'
+    );
+    const stopsTotal = allStops.reduce((s, st) => s + st.estimatedCost, 0);
+    const totalRealisticCost =
+      dehdashtTrip.accommodation.totalStayCost +
+      dehdashtTrip.dailyTransport.totalTransportCost +
+      stopsTotal;
+
+    assert.ok(
+      totalRealisticCost < 120,
+      `2 days in Dehdasht must reflect real local costs (< €120 total, not inflated to €800!), got €${totalRealisticCost}`
+    );
+    assert.ok(
+      dehdashtTrip.days[0].dailyBriefing.vibeSummary
+        .toLowerCase()
+        .includes('surplus'),
+      'Day 1 Daily Briefing must highlight the substantial budget surplus for high-value destinations'
+    );
+    console.log('✓ [PASS] Test 8: Hyper-local purchasing power grounding (Dehdasht, Iran €800 budget -> ~€90 realistic total + budget surplus note)');
+    passed++;
+  }
+
+  console.log(`\nAll ${passed}/8 automated test suites passed!`);
 }
 
 runTestSuite();

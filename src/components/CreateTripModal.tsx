@@ -104,6 +104,15 @@ const SAMPLE_PROMPTS = [
     text: '3 days in Paris, unhurried Left Bank art galleries, covered food markets, and Luxembourg gardens',
   },
   {
+    city: 'Dehdasht',
+    startDate: '2026-11-12',
+    endDate: '2026-11-13',
+    budget: 800,
+    currency: 'EUR',
+    personality: 'Foodie' as TravelPersonality,
+    text: '2 days in Dehdasht, Iran, Belqeys Historical Old Town, Safavid Caravanserai, local Boomgardi eco-lodge & authentic regional cuisine',
+  },
+  {
     city: 'Tokyo',
     startDate: '2026-11-12',
     endDate: '2026-11-14',
@@ -311,6 +320,8 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
                 <option value="EUR">EUR (€)</option>
                 <option value="USD">USD ($)</option>
                 <option value="GBP">GBP (£)</option>
+                <option value="IRT">IRT (Tomans)</option>
+                <option value="IRR">IRR (Rials)</option>
                 <option value="TRY">TRY (₺)</option>
                 <option value="JPY">JPY (¥)</option>
               </select>
@@ -348,7 +359,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
                         {p.label}
                       </span>
                       <span className="text-[11px] font-mono text-teal-800 tabular-nums">
-                        ~{getCurrencySymbol(currency)}{p.suggestedBudget}
+                        ~{currency === 'IRT' || currency === 'IRR' ? `${p.suggestedBudget.toLocaleString()} ${getCurrencySymbol(currency)}` : `${getCurrencySymbol(currency)}${p.suggestedBudget}`}
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">

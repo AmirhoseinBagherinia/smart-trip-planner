@@ -606,10 +606,67 @@ export const SEED_VERIFIED_PLACES: VerifiedPlace[] = [
     lat: 29.6256,
     lng: 52.5583,
     openingHours: '08:00-22:30',
-    typicalCostUsd: 6,
+    typicalCostUsd: 3,
     isIndoor: false,
     verifiedBy: 'Elena Rostova',
     updatedAt: '2026-10-22T10:00:00Z',
+  },
+  // Dehdasht (Kohgiluyeh and Boyer-Ahmad, Iran)
+  {
+    id: 'vp-deh-1',
+    city: 'Dehdasht',
+    country: 'Iran',
+    name: 'Belqeys Historical Old Town of Dehdasht (Baft-e Tarikhi)',
+    category: 'History & Culture',
+    lat: 30.7894,
+    lng: 50.5612,
+    openingHours: '07:30-19:30',
+    typicalCostUsd: 2,
+    isIndoor: false,
+    verifiedBy: 'Elena Rostova',
+    updatedAt: '2026-10-25T10:00:00Z',
+  },
+  {
+    id: 'vp-deh-2',
+    city: 'Dehdasht',
+    country: 'Iran',
+    name: 'Dehdasht Safavid Caravanserai & Historic Hammam',
+    category: 'History & Culture',
+    lat: 30.7902,
+    lng: 50.5625,
+    openingHours: '08:00-19:00',
+    typicalCostUsd: 2,
+    isIndoor: true,
+    verifiedBy: 'Elena Rostova',
+    updatedAt: '2026-10-25T10:00:00Z',
+  },
+  {
+    id: 'vp-deh-3',
+    city: 'Dehdasht',
+    country: 'Iran',
+    name: 'Tang-e Pirzal Nature Gorge & Cypress Springs',
+    category: 'Nature & Parks',
+    lat: 30.8415,
+    lng: 50.618,
+    openingHours: '06:30-19:00',
+    typicalCostUsd: 0,
+    isIndoor: false,
+    verifiedBy: 'Elena Rostova',
+    updatedAt: '2026-10-25T10:00:00Z',
+  },
+  {
+    id: 'vp-deh-4',
+    city: 'Dehdasht',
+    country: 'Iran',
+    name: 'Kohgiluyeh Boomgardi Traditional Kitchen (Kardeh & Local Kabab)',
+    category: 'Food & Dining',
+    lat: 30.7938,
+    lng: 50.5651,
+    openingHours: '11:00-22:30',
+    typicalCostUsd: 4,
+    isIndoor: true,
+    verifiedBy: 'Elena Rostova',
+    updatedAt: '2026-10-25T10:00:00Z',
   },
 ];
 
@@ -1559,6 +1616,491 @@ const CITY_BLUEPRINTS: Record<string, CityBlueprint> = {
       },
     ],
   },
+  dehdasht: {
+    destination: 'Dehdasht',
+    country: 'Iran',
+    centerLat: 30.7936,
+    centerLng: 50.5647,
+    dayThemes: [
+      {
+        title: 'Belqeys Historical Old Town, Safavid Caravanserai & Kohgiluyeh Cuisine',
+        vibe: 'Safavid stone arches, centuries-old caravanserai courtyards, and authentic Zagros mountain hospitality.',
+        etiquette: 'Greet local hosts warmly with "Salam" and accept complimentary mountain herbal tea (Chai-e Koohi).',
+        wear: 'Comfortable walking shoes for the historic stone paths of Belqeys Old Town.',
+        stops: [
+          {
+            name: 'Belqeys Historical Old Town of Dehdasht (Baft-e Tarikhi)',
+            description: 'Explore the 35-hectare Safavid historical city of Belqeys featuring ancient stone alleys, vaulted chambers, and medieval watchtowers.',
+            category: 'History & Culture',
+            startTime: '09:00',
+            endTime: '11:15',
+            openingHours: '07:30-19:30',
+            estimatedCost: 2,
+            lat: 30.7894,
+            lng: 50.5612,
+            isIndoor: false,
+            verifiedPlaceId: 'vp-deh-1',
+            mysteryClue: 'Thirty-five hectares of Safavid stone arches and merchant lanes preserved in Kohgiluyeh.',
+          },
+          {
+            name: 'Kohgiluyeh Boomgardi Traditional Kitchen (Kardeh & Local Kabab)',
+            description: 'Savor authentic Ash-e Kardeh (wild mountain herb soup), oak-roasted lamb kebab, and fresh local doogh.',
+            category: 'Food & Dining',
+            startTime: '12:00',
+            endTime: '13:45',
+            openingHours: '11:00-22:30',
+            estimatedCost: 4,
+            lat: 30.7938,
+            lng: 50.5651,
+            isIndoor: true,
+            verifiedPlaceId: 'vp-deh-4',
+            mysteryClue: 'A traditional courtyard kitchen serving fragrant wild Zagros herbs and charcoal-grilled specialties.',
+          },
+          {
+            name: 'Dehdasht Safavid Caravanserai & Historic Hammam',
+            description: 'Tour the restored brick-and-stone Safavid caravanserai with 37 chambers and adjacent vaulted bathhouse.',
+            category: 'History & Culture',
+            startTime: '14:30',
+            endTime: '16:30',
+            openingHours: '08:00-19:00',
+            estimatedCost: 2,
+            lat: 30.7902,
+            lng: 50.5625,
+            isIndoor: true,
+            verifiedPlaceId: 'vp-deh-2',
+            mysteryClue: 'Where Silk Road and Persian Gulf trade caravans rested beneath four symmetrical iwans.',
+          },
+          {
+            name: 'Dehdasht Traditional Bakery & Evening Chai House',
+            description: 'Taste warm local Tiri flatbread, wild mountain honey, walnut pastries, and cardamom tea.',
+            category: 'Food & Dining',
+            startTime: '17:30',
+            endTime: '19:15',
+            openingHours: '08:00-22:00',
+            estimatedCost: 3,
+            lat: 30.7951,
+            lng: 50.5668,
+            isIndoor: true,
+            mysteryClue: 'Follow the aroma of wood-fired flatbread and wild Zagros thyme tea in central Dehdasht.',
+          },
+        ],
+      },
+      {
+        title: 'Tang-e Pirzal Nature Gorge, Marun Valley & Bazaar Walk',
+        vibe: 'Emerald mountain springs, ancient oak groves, and lively regional produce markets.',
+        etiquette: 'Keep natural spring waters clean and support local nomad weavers in the bazaar.',
+        wear: 'Sturdy trail sandals or sneakers for the shaded gorge paths of Tang-e Pirzal.',
+        stops: [
+          {
+            name: 'Tang-e Pirzal Nature Gorge & Cypress Springs',
+            description: 'Walk beside crystal-clear mountain springs, ancient oak trees, and cool limestone cliffs outside Dehdasht.',
+            category: 'Nature & Parks',
+            startTime: '09:00',
+            endTime: '11:30',
+            openingHours: '06:30-19:00',
+            estimatedCost: 0,
+            lat: 30.8415,
+            lng: 50.618,
+            isIndoor: false,
+            verifiedPlaceId: 'vp-deh-3',
+            mysteryClue: 'A lush Zagros canyon where cold mountain springs feed centuries-old oak and willow groves.',
+          },
+          {
+            name: 'Saray-e Kohgiluyeh Garden Lunch (Dizi & Saffron Tahchin)',
+            description: 'Enjoy slow-simmered stoneware Dizi (Abgoosht) with fresh basil, pickled garlic, and saffron rice.',
+            category: 'Food & Dining',
+            startTime: '12:30',
+            endTime: '14:15',
+            openingHours: '11:30-22:00',
+            estimatedCost: 5,
+            lat: 30.7962,
+            lng: 50.5634,
+            isIndoor: true,
+            mysteryClue: 'Clay-pot stews simmered for six hours and served with hand-baked flatbread.',
+          },
+          {
+            name: 'Dehdasht Central Bazaar & Nomad Gabbeh Weavers',
+            description: 'Browse hand-knotted Lori Gabbeh rugs, dried mountain figs, wild pistachio (Baneh), and local spices.',
+            category: 'Shopping & Markets',
+            startTime: '15:00',
+            endTime: '17:00',
+            openingHours: '08:30-21:00',
+            estimatedCost: 4,
+            lat: 30.7925,
+            lng: 50.564,
+            isIndoor: true,
+            mysteryClue: 'Vibrant geometric wool rugs woven by Zagros tribes line the central market arcade.',
+          },
+        ],
+      },
+      {
+        title: 'Kamar-Doogh Waterfall Excursion & Regional Farewell Feast',
+        vibe: 'Towering misty waterfalls, Zagros foothill panoramas, and traditional hospitality.',
+        etiquette: 'Start the morning excursion early to enjoy the cool mountain mist.',
+        wear: 'Breathable outdoor layers and camera gear.',
+        stops: [
+          {
+            name: 'Marun River Valley & Zagros Foothill Overlook',
+            description: 'Take in sweeping morning views across the Marun river valley and surrounding Zagros peaks.',
+            category: 'Nature & Parks',
+            startTime: '09:00',
+            endTime: '11:15',
+            openingHours: '06:00-20:00',
+            estimatedCost: 0,
+            lat: 30.7785,
+            lng: 50.542,
+            isIndoor: false,
+            mysteryClue: 'Where turquoise river waters wind through dramatic limestone ridges.',
+          },
+          {
+            name: 'Zagros Hearth Traditional Grill & Herb Platter',
+            description: 'Feast on grilled trout, mountain herb frittata (Kookoo Sabzi), and pomegranate molasses.',
+            category: 'Food & Dining',
+            startTime: '12:15',
+            endTime: '14:00',
+            openingHours: '11:30-22:30',
+            estimatedCost: 5,
+            lat: 30.7918,
+            lng: 50.5675,
+            isIndoor: true,
+            mysteryClue: 'Fresh river trout grilled over oak embers with tangy local pomegranate sauce.',
+          },
+          {
+            name: 'Imamzadeh Jaber Historic Courtyard & Foothill Walk',
+            description: 'Visit the peaceful historic shrine courtyard and surrounding terraced orchards.',
+            category: 'History & Culture',
+            startTime: '15:00',
+            endTime: '17:00',
+            openingHours: '08:00-20:00',
+            estimatedCost: 0,
+            lat: 30.8012,
+            lng: 50.5715,
+            isIndoor: false,
+            mysteryClue: 'A serene whitewashed dome nestled among foothill orchards.',
+          },
+        ],
+      },
+    ],
+  },
+  yasuj: {
+    destination: 'Yasuj',
+    country: 'Iran',
+    centerLat: 30.6682,
+    centerLng: 51.588,
+    dayThemes: [
+      {
+        title: 'Yasuj Waterfall Canyon, Dena Foothills & Mountain Ash Kitchen',
+        vibe: 'Crisp Zagros mountain air, cascading spring waterfalls, and warm Lori hospitality.',
+        etiquette: 'Greet local families along the waterfall trails with a friendly nod and "Salam".',
+        wear: 'Layered mountain clothing and gripped walking shoes.',
+        stops: [
+          {
+            name: 'Yasuj Waterfall (Abshar-e Yasuj) & Walnut Valley',
+            description: 'Walk shaded stone footpaths through walnut and plane tree orchards to the 10-meter natural spring waterfall.',
+            category: 'Nature & Parks',
+            startTime: '09:00',
+            endTime: '11:30',
+            openingHours: '07:00-21:00',
+            estimatedCost: 1,
+            lat: 30.6928,
+            lng: 51.6152,
+            isIndoor: false,
+            mysteryClue: 'Snowmelt from the Dena peaks cascades down mossy cliffs framed by walnut orchards.',
+          },
+          {
+            name: 'Dena Boomgardi Mountain Kitchen (Ash-e Kardeh & Kabab)',
+            description: 'Dine on steaming bowls of Ash-e Kardeh, grilled lamb ribs, and local buttermilk on a mountain terrace.',
+            category: 'Food & Dining',
+            startTime: '12:15',
+            endTime: '14:00',
+            openingHours: '11:00-22:30',
+            estimatedCost: 5,
+            lat: 30.6745,
+            lng: 51.596,
+            isIndoor: true,
+            mysteryClue: 'Woven Lori kilims line a wooden terrace overlooking the green valleys of Boyer-Ahmad.',
+          },
+          {
+            name: ' Yasuj Forest Park (Park-e Jangali) Panoramic Ridge',
+            description: 'Enjoy sunset views over the city of Yasuj and the snow-dusted Dena mountain range.',
+            category: 'Nature & Parks',
+            startTime: '15:00',
+            endTime: '17:30',
+            openingHours: '06:30-22:00',
+            estimatedCost: 0,
+            lat: 30.6812,
+            lng: 51.6045,
+            isIndoor: false,
+            mysteryClue: 'An oak-forested ridge rising directly above the capital of Kohgiluyeh and Boyer-Ahmad.',
+          },
+        ],
+      },
+      {
+        title: 'Tang-e Tamoradi Waterfalls, Bashar River & Local Handicrafts',
+        vibe: 'Dramatic limestone gorges, turquoise river pools, and tribal weaving.',
+        etiquette: 'Respect local picnic areas along the Bashar River.',
+        wear: 'Outdoor walking shoes and sun protection.',
+        stops: [
+          {
+            name: 'Tang-e Tamoradi Gorge & Four Waterfalls',
+            description: 'Explore the dramatic canyon southwest of Yasuj where four seasonal waterfalls plunge into limestone pools.',
+            category: 'Nature & Parks',
+            startTime: '09:00',
+            endTime: '12:00',
+            openingHours: '07:00-19:00',
+            estimatedCost: 1,
+            lat: 30.5412,
+            lng: 51.4215,
+            isIndoor: false,
+            mysteryClue: 'A legendary Zagros gorge where four silver cascades echo against sheer canyon walls.',
+          },
+          {
+            name: 'Bashar Riverbank Trout & Oak-Fired Bread Lunch',
+            description: 'Taste fresh cold-water rainbow trout grilled beside the Bashar River with mountain herbs.',
+            category: 'Food & Dining',
+            startTime: '12:45',
+            endTime: '14:30',
+            openingHours: '11:30-21:30',
+            estimatedCost: 5,
+            lat: 30.659,
+            lng: 51.579,
+            isIndoor: false,
+            mysteryClue: 'Riverside pavilions serving freshly caught mountain trout and wild leek bread.',
+          },
+          {
+            name: 'Yasuj Traditional Bazaar & Jajim Weaving Stalls',
+            description: 'Discover colorful hand-woven Jajim textiles, mountain honey, and dried Dena herbs.',
+            category: 'Shopping & Markets',
+            startTime: '15:30',
+            endTime: '17:30',
+            openingHours: '09:00-21:00',
+            estimatedCost: 4,
+            lat: 30.6665,
+            lng: 51.5865,
+            isIndoor: true,
+            mysteryClue: 'Brightly striped wool textiles and jars of wild astragalus honey.',
+          },
+        ],
+      },
+    ],
+  },
+  kashan: {
+    destination: 'Kashan',
+    country: 'Iran',
+    centerLat: 33.985,
+    centerLng: 51.41,
+    dayThemes: [
+      {
+        title: 'Fin Persian Garden, Tabatabaei House & Rosewater Heritage',
+        vibe: 'Turquoise qanat water channels, Qajar stained-glass windcatchers, and fragrant rosewater.',
+        etiquette: 'Speak softly inside the historic courtyard houses.',
+        wear: 'Breathable cotton attire and comfortable slip-on shoes.',
+        stops: [
+          {
+            name: 'Fin Persian Garden (Bagh-e Fin UNESCO Site)',
+            description: 'Walk beside natural spring-fed turquoise pools and centuries-old cypresses in Iran’s oldest extant Persian garden.',
+            category: 'Nature & Parks',
+            startTime: '09:00',
+            endTime: '11:00',
+            openingHours: '08:00-19:00',
+            estimatedCost: 3,
+            lat: 33.9464,
+            lng: 51.3722,
+            isIndoor: false,
+            mysteryClue: 'Where the Soleymanieh spring feeds hundreds of gravity-powered fountains beneath ancient cypresses.',
+          },
+          {
+            name: 'Abbasi Traditional Courtyard Restaurant (Goosht-e Loobia)',
+            description: 'Dine on Kashan’s signature Goosht-e Loobia (slow-cooked lamb and bean stew with fragrant rice) beside a sunken garden.',
+            category: 'Food & Dining',
+            startTime: '12:00',
+            endTime: '13:45',
+            openingHours: '11:30-22:30',
+            estimatedCost: 5,
+            lat: 33.9742,
+            lng: 51.4388,
+            isIndoor: true,
+            mysteryClue: 'A restored Qajar mansion serving saffron-scented Kashani stews on cushioned takht beds.',
+          },
+          {
+            name: 'Tabatabaei & Borujerdi Historical Houses',
+            description: 'Marvel at intricate stucco reliefs, windcatchers (badgirs), and stained-glass courtyard halls.',
+            category: 'History & Culture',
+            startTime: '14:15',
+            endTime: '16:30',
+            openingHours: '08:00-19:30',
+            estimatedCost: 3,
+            lat: 33.9748,
+            lng: 51.4392,
+            isIndoor: true,
+            mysteryClue: 'Designed by Ustad Ali Maryam with frescoes by Royal Painter Kamal-ol-Molk.',
+          },
+          {
+            name: 'Sultan Amir Ahmad Bathhouse & Rooftop Domes',
+            description: 'Climb to the sculpted turquoise-and-ochre lens domes for golden hour views over historic Kashan.',
+            category: 'History & Culture',
+            startTime: '17:00',
+            endTime: '18:30',
+            openingHours: '08:00-20:00',
+            estimatedCost: 3,
+            lat: 33.9736,
+            lng: 51.4379,
+            isIndoor: true,
+            mysteryClue: 'Clustered convex glass domes filter desert sunlight into a sixteenth-century bathhouse below.',
+          },
+        ],
+      },
+      {
+        title: 'Kashan Grand Bazaar, Amin al-Dowleh Timcheh & Agha Bozorg Mosque',
+        vibe: 'Soaring brick muqarnas vaults, copper smiths, and symmetrical sunken courtyard architecture.',
+        etiquette: 'Pause under the central skylight of Timcheh-ye Amin al-Dowleh for tea.',
+        wear: 'Light walking footwear.',
+        stops: [
+          {
+            name: 'Kashan Historic Bazaar & Timcheh-ye Amin al-Dowleh',
+            description: 'Gaze up at the towering 19th-century painted brick muqarnas vault above handmade carpet merchants.',
+            category: 'Shopping & Markets',
+            startTime: '09:30',
+            endTime: '11:45',
+            openingHours: '08:30-20:00',
+            estimatedCost: 2,
+            lat: 33.9872,
+            lng: 51.4465,
+            isIndoor: true,
+            mysteryClue: 'A three-story caravanserai dome cellularly carved like a celestial honeycomb.',
+          },
+          {
+            name: 'Mozaffari Traditional Tea House & Saffron Ice Cream',
+            description: 'Enjoy rosewater-and-pistachio bastani ice cream, cardamom tea, and local Kashan baklava.',
+            category: 'Food & Dining',
+            startTime: '12:15',
+            endTime: '13:45',
+            openingHours: '10:00-21:00',
+            estimatedCost: 3,
+            lat: 33.9865,
+            lng: 51.4458,
+            isIndoor: true,
+            mysteryClue: 'Tucked beneath the bazaar vaults where Mohammadi rosewater perfumes every cup.',
+          },
+          {
+            name: 'Agha Bozorg Mosque & Sunken Madrasa',
+            description: 'Admire the two-level symmetrical courtyard, twin minarets, and windcatcher cooling towers.',
+            category: 'History & Culture',
+            startTime: '14:30',
+            endTime: '16:30',
+            openingHours: '08:00-19:30',
+            estimatedCost: 0,
+            lat: 33.9788,
+            lng: 51.4441,
+            isIndoor: false,
+            mysteryClue: 'A nineteenth-century architectural masterpiece built around a sunken garden seminary.',
+          },
+        ],
+      },
+    ],
+  },
+  mombasa: {
+    destination: 'Mombasa',
+    country: 'Kenya',
+    centerLat: -4.0435,
+    centerLng: 39.6682,
+    dayThemes: [
+      {
+        title: 'Fort Jesus UNESCO Ramparts, Swahili Old Town & Tamarind Dhow',
+        vibe: 'Sixteenth-century coral-stone ramparts, carved Zanzibar doors, and Indian Ocean spices.',
+        etiquette: 'Greet locals with "Jambo" or the coastal Swahili greeting "Shikamoo".',
+        wear: 'Breathable linen clothing and sandals suitable for coastal humidity.',
+        stops: [
+          {
+            name: 'Fort Jesus UNESCO Museum & Coral Ramparts',
+            description: 'Explore the 1593 Portuguese and Omani coral-rock fortress overlooking the Old Mombasa Harbor.',
+            category: 'History & Culture',
+            startTime: '09:00',
+            endTime: '11:15',
+            openingHours: '08:00-18:00',
+            estimatedCost: 12,
+            lat: -4.0628,
+            lng: 39.6797,
+            isIndoor: false,
+            mysteryClue: 'Designed in the shape of a Renaissance human figure carved into coastal coral rock.',
+          },
+          {
+            name: 'Forodhani Swahili Seafront Restaurant (Pilau & Coconut Fish)',
+            description: 'Savor coastal Swahili fish curry simmered in coconut milk (Samaki wa Kupaka) and spiced pilau.',
+            category: 'Food & Dining',
+            startTime: '12:00',
+            endTime: '13:45',
+            openingHours: '11:00-22:00',
+            estimatedCost: 10,
+            lat: -4.0612,
+            lng: 39.6788,
+            isIndoor: false,
+            mysteryClue: 'Oceanfront terrace where dhows sail past and cardamom-spiced rice meets fresh Indian Ocean catch.',
+          },
+          {
+            name: 'Mombasa Old Town & Marikiti Spice Market Walk',
+            description: 'Wander narrow streets lined with ornate carved teak balconies and fragrant clove, cinnamon, and tamarind stalls.',
+            category: 'Shopping & Markets',
+            startTime: '14:30',
+            endTime: '16:30',
+            openingHours: '08:00-19:00',
+            estimatedCost: 6,
+            lat: -4.0585,
+            lng: 39.6745,
+            isIndoor: false,
+            mysteryClue: 'Brass-studded doors and aromatic sacks of Zanzibar cloves andahili coffee.',
+          },
+        ],
+      },
+      {
+        title: 'Haller Park Sanctuary, Mama Ngina Waterfront & Nyali Beach',
+        vibe: 'Restored coastal forest wildlife, baobab groves, and crispy cassava crisps by the channel.',
+        etiquette: 'Keep a respectful distance when feeding Rothschild giraffes at Haller Park.',
+        wear: 'Sun hat, sunglasses, and light walking shoes.',
+        stops: [
+          {
+            name: 'Haller Park Coastal Nature Sanctuary',
+            description: 'Walk shaded casuarina trails past giant Aldabra tortoises, giraffes, and hippos in a reclaimed quarry oasis.',
+            category: 'Nature & Parks',
+            startTime: '09:00',
+            endTime: '11:30',
+            openingHours: '08:00-17:30',
+            estimatedCost: 14,
+            lat: -4.0125,
+            lng: 39.7192,
+            isIndoor: false,
+            mysteryClue: 'A former limestone quarry transformed into a lush tropical sanctuary of giant tortoises and giraffes.',
+          },
+          {
+            name: 'Blue Room Mombasa (Historic Viazi Karai & Bhajia Lunch)',
+            description: 'Taste Mombasa’s iconic crispy spiced potato Viazi Karai with tangy tamarind sauce and fresh passion juice.',
+            category: 'Food & Dining',
+            startTime: '12:30',
+            endTime: '14:00',
+            openingHours: '08:00-21:00',
+            estimatedCost: 8,
+            lat: -4.0542,
+            lng: 39.6675,
+            isIndoor: true,
+            mysteryClue: 'A beloved coastal institution on Haile Selassie Avenue famous since the 1950s.',
+          },
+          {
+            name: 'Mama Ngina Waterfront & Likoni Channel Sunset Walk',
+            description: 'Stroll beneath ancient baobab trees watching ocean liners and ferries cross the Kilindini harbor entrance.',
+            category: 'Nature & Parks',
+            startTime: '16:00',
+            endTime: '18:00',
+            openingHours: '06:00-22:00',
+            estimatedCost: 2,
+            lat: -4.0752,
+            lng: 39.6712,
+            isIndoor: false,
+            mysteryClue: 'Ancient coastal baobabs frame the deep-water channel where spiced cassava crisps are roasted.',
+          },
+        ],
+      },
+    ],
+  },
 };
 
 export function buildIstanbulDays(
@@ -2158,12 +2700,20 @@ export async function resolveDynamicCityCoordinates(destination: string): Promis
   }
 
   const KNOWN_COORDS: Record<string, { country: string; lat: number; lng: number }> = {
+    dehdasht: { country: 'Iran', lat: 30.7936, lng: 50.5647 },
+    yasuj: { country: 'Iran', lat: 30.6682, lng: 51.588 },
+    kashan: { country: 'Iran', lat: 33.985, lng: 51.41 },
+    shiraz: { country: 'Iran', lat: 29.5918, lng: 52.5837 },
+    isfahan: { country: 'Iran', lat: 32.6546, lng: 51.668 },
+    yazd: { country: 'Iran', lat: 31.8974, lng: 54.3569 },
+    tehran: { country: 'Iran', lat: 35.6892, lng: 51.389 },
+    tabriz: { country: 'Iran', lat: 38.0962, lng: 46.2738 },
+    kerman: { country: 'Iran', lat: 30.2839, lng: 57.0834 },
+    mombasa: { country: 'Kenya', lat: -4.0435, lng: 39.6682 },
+    nairobi: { country: 'Kenya', lat: -1.2921, lng: 36.8219 },
     madrid: { country: 'Spain', lat: 40.4168, lng: -3.7038 },
     barcelona: { country: 'Spain', lat: 41.3874, lng: 2.1686 },
     seville: { country: 'Spain', lat: 37.3891, lng: -5.9845 },
-    shiraz: { country: 'Iran', lat: 29.5918, lng: 52.5837 },
-    isfahan: { country: 'Iran', lat: 32.6546, lng: 51.668 },
-    tehran: { country: 'Iran', lat: 35.6892, lng: 51.389 },
     rome: { country: 'Italy', lat: 41.9028, lng: 12.4964 },
     florence: { country: 'Italy', lat: 43.7696, lng: 11.2558 },
     venice: { country: 'Italy', lat: 45.4408, lng: 12.3155 },
@@ -2404,8 +2954,114 @@ const CITY_ACCOMMODATION_CATALOG: Record<
   },
 };
 
+export type EconomyTier =
+  | 'iran_local'
+  | 'emerging_value'
+  | 'western_or_major_hub';
+
+export function convertFromEurBase(
+  eurAmount: number,
+  currencyCode = 'EUR'
+): number {
+  const code = String(currencyCode || 'EUR').toUpperCase().trim();
+  const multipliers: Record<string, number> = {
+    EUR: 1,
+    USD: 1.08,
+    GBP: 0.85,
+    TRY: 37,
+    JPY: 165,
+    IRT: 68000,
+    TOMAN: 68000,
+    TOMANS: 68000,
+    IRR: 680000,
+    RIAL: 680000,
+    RIALS: 680000,
+  };
+  const mult = multipliers[code] ?? 1;
+  return Math.max(0, Math.round(eurAmount * mult));
+}
+
+export function getDestinationEconomyProfile(
+  destination: string,
+  country?: string
+): { tier: EconomyTier; label: string } {
+  const combined = `${destination} ${country || ''}`.toLowerCase();
+  const iranKeywords = [
+    'iran',
+    'dehdasht',
+    'yasuj',
+    'kashan',
+    'shiraz',
+    'isfahan',
+    'esfahan',
+    'yazd',
+    'tehran',
+    'tabriz',
+    'mashhad',
+    'kerman',
+    'ahvaz',
+    'bushehr',
+    'qeshm',
+    'kish',
+    'rasht',
+    'hamadan',
+    'kermanshah',
+    'gachsaran',
+    'sisakht',
+    'kohgiluyeh',
+    'boyer-ahmad',
+    'lor',
+    'zagros',
+  ];
+  if (iranKeywords.some((k) => combined.includes(k))) {
+    return {
+      tier: 'iran_local',
+      label: 'Iranian Regional & Heritage Local Economy',
+    };
+  }
+
+  const emergingKeywords = [
+    'mombasa',
+    'kenya',
+    'nairobi',
+    'cairo',
+    'luxor',
+    'egypt',
+    'bangkok',
+    'chiang mai',
+    'thailand',
+    'hanoi',
+    'ho chi minh',
+    'vietnam',
+    'marrakech',
+    'fes',
+    'morocco',
+    'tbilisi',
+    'batumi',
+    'georgia',
+    'bali',
+    'indonesia',
+    'cusco',
+    'lima',
+    'peru',
+  ];
+  if (emergingKeywords.some((k) => combined.includes(k))) {
+    return {
+      tier: 'emerging_value',
+      label: 'High-Value Emerging Regional Economy',
+    };
+  }
+
+  return {
+    tier: 'western_or_major_hub',
+    label: 'International / European Market Economy',
+  };
+}
+
 export function buildRecommendedAccommodationAndTransit(params: {
   destination: string;
+  country?: string;
+  currency?: string;
   centerLat: number;
   centerLng: number;
   personality: TravelPersonality;
@@ -2416,11 +3072,162 @@ export function buildRecommendedAccommodationAndTransit(params: {
   dailyTransport: DailyTransportPlan;
 } {
   const cleanCity = params.destination.trim() || 'Madrid';
+  const currency = params.currency || 'EUR';
+  const economy = getDestinationEconomyProfile(cleanCity, params.country);
+  const nights = Math.max(1, params.daysCount);
+  const days = Math.max(1, params.daysCount);
+
+  if (economy.tier === 'iran_local') {
+    const iranStayByPersonality: Record<
+      TravelPersonality,
+      {
+        name: string;
+        neighborhood: string;
+        style: string;
+        eurNightly: number;
+        bookingNote: string;
+        transportMode: string;
+        eurDailyTransit: number;
+        transportNotes: string;
+      }
+    > = {
+      Backpacker: {
+        name: `${cleanCity} Traditional Boomgardi Eco-Lodge`,
+        neighborhood: `${cleanCity} Historic Old Quarter`,
+        style: 'Authentic Local Boomgardi Guesthouse',
+        eurNightly: 15,
+        bookingNote: `Courtyard floor seating, home-cooked local breakfast, and warm regional hospitality in ${cleanCity}.`,
+        transportMode: `Shared Savari Taxis & Old Town Walking in ${cleanCity}`,
+        eurDailyTransit: 3,
+        transportNotes: 'Walkable historic quarter paired with affordable local savari and Snapp rides.',
+      },
+      'Slow Traveler': {
+        name: `Saray-e ${cleanCity} Courtyard Heritage House`,
+        neighborhood: `${cleanCity} Traditional Garden Alley`,
+        style: 'Restored Courtyard Eco-Lodge & Tea Garden',
+        eurNightly: 22,
+        bookingNote: `Tranquil central courtyard with pomegranate trees and afternoon herbal tea service in ${cleanCity}.`,
+        transportMode: `Unhurried Old Quarter Walks & Snapp Local Taxis`,
+        eurDailyTransit: 5,
+        transportNotes: 'Point-to-point local Snapp rides and gentle neighborhood strolls.',
+      },
+      Adventurer: {
+        name: `${cleanCity} Zagros Foothill & Valley Eco-Lodge`,
+        neighborhood: `${cleanCity} Canyon & Trailhead Edge`,
+        style: 'Mountain & Heritage Basecamp Eco-Lodge',
+        eurNightly: 20,
+        bookingNote: `Ideal basecamp for gorge excursions, waterfall hikes, and historic caravanserai trails around ${cleanCity}.`,
+        transportMode: `Local Charter Taxi (Darbast) for Gorge & Valley Excursions`,
+        eurDailyTransit: 6,
+        transportNotes: 'Includes local driver transfers to surrounding nature gorges and trailheads.',
+      },
+      Foodie: {
+        name: `Khaneh-ye Sonnati ${cleanCity} Culinary & Courtyard Stay`,
+        neighborhood: `${cleanCity} Historic Bazaar & Caravanserai Quarter`,
+        style: 'Boutique Culinary Boomgardi & Heritage Stay',
+        eurNightly: 26,
+        bookingNote: `Famous for wood-fired local bread, wild mountain herb stews (Ash-e Kardeh), and traditional courtyard dining in ${cleanCity}.`,
+        transportMode: `Local Taxis (Snapp / Darbast) & Bazaar Footpaths`,
+        eurDailyTransit: 5,
+        transportNotes: 'Short local taxi hops between traditional kitchens, bakeries, and historic bazaars.',
+      },
+      Luxury: {
+        name: `Grand Saray & Boutique Heritage Mansion ${cleanCity}`,
+        neighborhood: `${cleanCity} Historic Royal & Caravanserai District`,
+        style: 'Premier Restored Heritage Mansion & Private Courtyard',
+        eurNightly: 35,
+        bookingNote: `The finest private courtyard suite in ${cleanCity} with dedicated local host and curated regional feasts.`,
+        transportMode: `Full-Day Private Darbast Driver & Air-Conditioned Sedan`,
+        eurDailyTransit: 8,
+        transportNotes: 'Dedicated private local driver on standby for all heritage and nature excursions.',
+      },
+    };
+
+    const entry = iranStayByPersonality[params.personality];
+    const nightlyRate = Math.max(1, convertFromEurBase(entry.eurNightly, currency));
+    const totalStayCost = nightlyRate * nights;
+    const dailyCostPerDay = Math.max(
+      1,
+      convertFromEurBase(entry.eurDailyTransit, currency)
+    );
+    const totalTransportCost = dailyCostPerDay * days;
+
+    return {
+      accommodation: {
+        name: entry.name,
+        neighborhood: entry.neighborhood,
+        style: entry.style,
+        nightlyRate,
+        nights,
+        totalStayCost,
+        bookingNote: entry.bookingNote,
+        lat: Number((params.centerLat + 0.0018).toFixed(5)),
+        lng: Number((params.centerLng + 0.0018).toFixed(5)),
+      },
+      dailyTransport: {
+        modeSummary: entry.transportMode,
+        dailyCostPerDay,
+        totalTransportCost,
+        notes: entry.transportNotes,
+      },
+    };
+  }
+
+  if (economy.tier === 'emerging_value') {
+    const emergingEurNightly: Record<TravelPersonality, number> = {
+      Backpacker: 18,
+      Adventurer: 42,
+      'Slow Traveler': 48,
+      Foodie: 55,
+      Luxury: 135,
+    };
+    const emergingEurTransit: Record<TravelPersonality, number> = {
+      Backpacker: 4,
+      'Slow Traveler': 7,
+      Foodie: 8,
+      Adventurer: 10,
+      Luxury: 28,
+    };
+    const nightlyRate = Math.max(
+      1,
+      convertFromEurBase(emergingEurNightly[params.personality], currency)
+    );
+    const dailyCostPerDay = Math.max(
+      1,
+      convertFromEurBase(emergingEurTransit[params.personality], currency)
+    );
+    return {
+      accommodation: {
+        name:
+          params.personality === 'Luxury'
+            ? `${cleanCity} Heritage Oceanfront & Boutique Palace Resort`
+            : params.personality === 'Backpacker'
+            ? `${cleanCity} Old Quarter Social Guesthouse & Courtyard`
+            : `${cleanCity} Boutique Heritage & Courtyard Hotel`,
+        neighborhood: `${cleanCity} Historic & Cultural Quarter`,
+        style: `${params.personality} Verified Local Stay`,
+        nightlyRate,
+        nights,
+        totalStayCost: nightlyRate * nights,
+        bookingNote: `Authentic local rates anchored to ${cleanCity}’s real economy.`,
+        lat: Number((params.centerLat + 0.002).toFixed(5)),
+        lng: Number((params.centerLng + 0.002).toFixed(5)),
+      },
+      dailyTransport: {
+        modeSummary:
+          params.personality === 'Luxury'
+            ? `Private Chauffeur & Local Excursion Vehicle in ${cleanCity}`
+            : `Local Taxis, Tuk-Tuks / Transit & Old Town Walking in ${cleanCity}`,
+        dailyCostPerDay,
+        totalTransportCost: dailyCostPerDay * days,
+        notes: `Anchored to real local transit fares in ${cleanCity}.`,
+      },
+    };
+  }
+
   const cityKey = Object.keys(CITY_ACCOMMODATION_CATALOG).find((k) =>
     cleanCity.toLowerCase().includes(k)
   );
-  const nights = Math.max(1, params.daysCount);
-  const days = Math.max(1, params.daysCount);
 
   const fallbackEntry: Record<TravelPersonality, CityStayCatalogEntry> = {
     Luxury: {
@@ -2489,44 +3296,37 @@ export function buildRecommendedAccommodationAndTransit(params: {
     ? CITY_ACCOMMODATION_CATALOG[cityKey][params.personality]
     : fallbackEntry[params.personality];
 
-  // Scale nightly rate and daily transit harmoniously with totalBudget so the budget breakdown is cohesive
-  const targetStayShare: Record<TravelPersonality, number> = {
-    Luxury: 0.44,
-    'Slow Traveler': 0.42,
-    Foodie: 0.34,
-    Adventurer: 0.34,
-    Backpacker: 0.3,
-  };
-  const targetTransitShare: Record<TravelPersonality, number> = {
-    Luxury: 0.11,
-    'Slow Traveler': 0.07,
-    Foodie: 0.08,
-    Adventurer: 0.09,
-    Backpacker: 0.07,
-  };
-
-  const budgetBasedNightly = Math.round(
-    (params.totalBudget * targetStayShare[params.personality]) / nights
+  // Anchor to real local market rates for the personality without artificially burning oversized budgets
+  const baseNightlyInCurrency = convertFromEurBase(
+    entry.baseNightlyRate,
+    currency
   );
+  const baseTransitInCurrency = convertFromEurBase(
+    entry.baseDailyTransit,
+    currency
+  );
+
   const nightlyRate =
     params.personality === 'Luxury'
-      ? Math.max(entry.baseNightlyRate, budgetBasedNightly)
+      ? Math.min(
+          Math.round(baseNightlyInCurrency * 1.25),
+          Math.max(
+            baseNightlyInCurrency,
+            Math.round((params.totalBudget * 0.44) / nights)
+          )
+        )
       : params.personality === 'Backpacker'
-      ? Math.min(entry.baseNightlyRate, Math.max(20, budgetBasedNightly))
-      : Math.round((entry.baseNightlyRate + budgetBasedNightly) / 2);
+      ? Math.min(
+          baseNightlyInCurrency,
+          Math.max(
+            convertFromEurBase(22, currency),
+            Math.round((params.totalBudget * 0.3) / nights)
+          )
+        )
+      : baseNightlyInCurrency;
 
   const totalStayCost = nightlyRate * nights;
-
-  const budgetBasedTransit = Math.round(
-    (params.totalBudget * targetTransitShare[params.personality]) / days
-  );
-  const dailyCostPerDay =
-    params.personality === 'Luxury'
-      ? Math.max(entry.baseDailyTransit, budgetBasedTransit)
-      : params.personality === 'Backpacker'
-      ? Math.min(entry.baseDailyTransit, Math.max(5, budgetBasedTransit))
-      : Math.max(8, Math.round((entry.baseDailyTransit + budgetBasedTransit) / 2));
-
+  const dailyCostPerDay = baseTransitInCurrency;
   const totalTransportCost = dailyCostPerDay * days;
 
   return {
@@ -2552,23 +3352,164 @@ export function buildRecommendedAccommodationAndTransit(params: {
 
 /**
  * Deeply adapts a trip's day-by-day stops, categories, pacing, descriptions, and costs
- * to match the chosen TravelPersonality and totalBudget.
+ * to match the chosen TravelPersonality and destination's real-world local purchasing power.
  */
 export function applyPersonalityProfileToDays(
   rawDays: TripDay[],
   params: {
     destination: string;
+    country?: string;
+    currency?: string;
     personality: TravelPersonality;
     totalBudget: number;
     accommodationCost: number;
     transportCost: number;
   }
 ): TripDay[] {
-  const { destination, personality, totalBudget, accommodationCost, transportCost } =
-    params;
+  const {
+    destination,
+    country,
+    currency = 'EUR',
+    personality,
+    totalBudget,
+    accommodationCost,
+    transportCost,
+  } = params;
+  const economy = getDestinationEconomyProfile(destination, country);
   const cloned: TripDay[] = JSON.parse(JSON.stringify(rawDays));
 
-  // Add a 4th culinary dinner or active stop if needed for Foodie, Luxury, or Adventurer
+  // Hyper-local Iranian regional & heritage pricing (€2–€6 meals, €0–€4 heritage/nature)
+  if (economy.tier === 'iran_local') {
+    const iranExtraFoodStops = [
+      {
+        suffix: 'Traditional Sangak Bakery, Local Honey & Morning Chai-Khaneh',
+        desc: `Start the morning in ${destination} with pebble-baked hot sangak bread, local mountain honey, sheep cheese, and cardamom tea.`,
+        category: 'Food & Dining' as StopCategory,
+        startTime: '08:30',
+        endTime: '09:45',
+        eurCost: 2,
+      },
+      {
+        suffix: 'Traditional Courtyard Kitchen (Dizi, Ash-e Kardeh & Saffron Tahchin)',
+        desc: `Conclude the day at a beloved local kitchen in ${destination} for slow-cooked stoneware Dizi, wild herb soup, and charcoal kebab.`,
+        category: 'Food & Dining' as StopCategory,
+        startTime: '19:00',
+        endTime: '20:45',
+        eurCost: 5,
+      },
+      {
+        suffix: 'Bazaar Confectionery, Saffron Bastani & Herbal Tea House',
+        desc: `Sample rosewater-and-pistachio ice cream, walnut pastries, and mountain thyme tea in ${destination}’s historic bazaar.`,
+        category: 'Food & Dining' as StopCategory,
+        startTime: '18:30',
+        endTime: '20:00',
+        eurCost: 3,
+      },
+    ];
+
+    const iranDays = cloned.map((day, dIdx) => {
+      let stops = [...day.stops];
+
+      if (personality === 'Slow Traveler') {
+        stops = stops.slice(0, Math.min(3, Math.max(2, stops.length)));
+        const slowSlots = [
+          ['10:00', '12:00'],
+          ['13:00', '15:00'],
+          ['16:00', '18:00'],
+        ];
+        stops = stops.map((s, sIdx) => ({
+          ...s,
+          startTime: slowSlots[sIdx]?.[0] || s.startTime,
+          endTime: slowSlots[sIdx]?.[1] || s.endTime,
+          durationMinutes: 120,
+          description: `${s.description} Paced for unhurried Slow Traveler immersion with a long courtyard tea pause.`,
+        }));
+      } else if (
+        (personality === 'Foodie' || personality === 'Luxury') &&
+        stops.length < 4
+      ) {
+        const extra = iranExtraFoodStops[dIdx % iranExtraFoodStops.length];
+        const anchor = stops[stops.length - 1] || {
+          lat: 30.7936,
+          lng: 50.5647,
+        };
+        stops.push({
+          id: `stop-iran-extra-${dIdx + 1}-${Date.now()}`,
+          name: `${destination} Day ${dIdx + 1}: ${extra.suffix}`,
+          description: extra.desc,
+          category: extra.category,
+          startTime: extra.startTime,
+          endTime: extra.endTime,
+          durationMinutes: 105,
+          travelFromPrevMinutes: 12,
+          distanceFromPrevKm: 0.8,
+          openingHours: '08:00-22:30',
+          estimatedCost: convertFromEurBase(extra.eurCost, currency),
+          lat: Number((anchor.lat + 0.0025).toFixed(5)),
+          lng: Number((anchor.lng - 0.0025).toFixed(5)),
+          isIndoor: true,
+          mysteryClue: `An authentic local culinary gathering spot in ${destination}.`,
+          isCompleted: false,
+          upvotes: ['user-traveler-1'],
+          downvotes: [],
+          comments: [],
+        });
+      }
+
+      // Anchor every stop's cost strictly to real Iranian local economy (€2–€6 for meals, €0–€4 for sites)
+      stops = stops.map((s) => {
+        const isFood =
+          s.category === 'Food & Dining' || s.category === 'Shopping & Markets';
+        const isFreeNature =
+          s.category === 'Nature & Parks' && (s.estimatedCost === 0 || s.name.toLowerCase().includes('gorge') || s.name.toLowerCase().includes('overlook'));
+        let eurCost = isFreeNature
+          ? 0
+          : isFood
+          ? personality === 'Luxury'
+            ? 6
+            : personality === 'Foodie'
+            ? 5
+            : personality === 'Backpacker'
+            ? 3
+            : 4
+          : personality === 'Luxury'
+          ? 4
+          : 2;
+
+        return {
+          ...s,
+          estimatedCost:
+            eurCost === 0 ? 0 : Math.max(1, convertFromEurBase(eurCost, currency)),
+        };
+      });
+
+      return {
+        ...day,
+        stops,
+      };
+    });
+
+    const stopsSum = iranDays
+      .flatMap((d) => d.stops)
+      .reduce((acc, s) => acc + Number(s.estimatedCost || 0), 0);
+    const realisticTotal = accommodationCost + transportCost + stopsSum;
+
+    if (totalBudget > realisticTotal * 1.4 && iranDays.length > 0) {
+      const surplus = Math.max(0, totalBudget - realisticTotal);
+      const surplusNote = `High-Value Destination Note: ${destination} offers exceptional local purchasing power (~${formatCurrency(
+        realisticTotal,
+        currency
+      )} total for eco-lodge stay, local transit, and authentic meals), leaving a substantial ${formatCurrency(
+        surplus,
+        currency
+      )} budget surplus from your ${formatCurrency(totalBudget, currency)} allocation.`;
+      iranDays[0].dailyBriefing.vibeSummary = `${iranDays[0].dailyBriefing.vibeSummary} ${surplusNote}`;
+    }
+
+    return iranDays;
+  }
+
+  // Add a 4th culinary dinner or active stop if needed for Foodie, Luxury, or Adventurer in international cities
   const extraFoodieStops = [
     {
       suffix: 'Artisanal Morning Bakery & Specialty Coffee Roastery',
@@ -2719,7 +3660,6 @@ export function applyPersonalityProfileToDays(
             estimatedCost: Math.max(28, Math.round((s.estimatedCost || 24) * 1.55)),
           };
         }
-        // Pair cultural stops with a historic bakery/café specialty
         if (sIdx === 0) {
           return {
             ...s,
@@ -2832,45 +3772,62 @@ export function applyPersonalityProfileToDays(
     };
   });
 
-  // Harmonize stop costs with remaining budget after accommodation & transit so total estimated trip spend is realistic
-  const rawStopsSum = transformedDays
-    .flatMap((d) => d.stops)
-    .reduce((acc, s) => acc + Number(s.estimatedCost || 0), 0);
-
-  const targetTotalUtilization: Record<TravelPersonality, number> = {
-    Luxury: 0.89,
-    Foodie: 0.86,
-    Adventurer: 0.84,
-    'Slow Traveler': 0.82,
-    Backpacker: 0.74,
-  };
-
-  const targetTotalSpend = totalBudget * targetTotalUtilization[personality];
-  const desiredStopsBudget = Math.max(
-    totalBudget * 0.22,
-    targetTotalSpend - accommodationCost - transportCost
-  );
-
-  if (rawStopsSum > 0) {
-    const scaleFactor = desiredStopsBudget / rawStopsSum;
-    // Clamp scaleFactor to reasonable bounds so costs always feel natural
-    const clampedScale =
-      personality === 'Luxury'
-        ? Math.min(2.6, Math.max(0.75, scaleFactor))
-        : personality === 'Backpacker'
-        ? Math.min(1.15, Math.max(0.35, scaleFactor))
-        : Math.min(1.85, Math.max(0.6, scaleFactor));
-
+  // For emerging_value or Backpacker, keep authentic local prices without inflating to burn budget
+  if (economy.tier === 'emerging_value' || personality === 'Backpacker') {
     for (const day of transformedDays) {
       for (const stop of day.stops) {
         if (stop.estimatedCost > 0) {
-          stop.estimatedCost = Math.max(
-            personality === 'Backpacker' ? 4 : 8,
-            Math.round(stop.estimatedCost * clampedScale)
-          );
+          const baseEur =
+            economy.tier === 'emerging_value'
+              ? Math.max(4, Math.round(stop.estimatedCost * 0.55))
+              : stop.estimatedCost;
+          stop.estimatedCost = Math.max(1, convertFromEurBase(baseEur, currency));
         }
       }
     }
+    const stopsTotal = transformedDays
+      .flatMap((d) => d.stops)
+      .reduce((acc, s) => acc + Number(s.estimatedCost || 0), 0);
+    const fullTotal = accommodationCost + transportCost + stopsTotal;
+    if (totalBudget > fullTotal * 1.5 && transformedDays.length > 0) {
+      const surplus = Math.max(0, totalBudget - fullTotal);
+      transformedDays[0].dailyBriefing.vibeSummary = `${transformedDays[0].dailyBriefing.vibeSummary} High-Value Budget Note: Realistic local costs total ~${formatCurrency(
+        fullTotal,
+        currency
+      )}, leaving a ${formatCurrency(
+        surplus,
+        currency
+      )} surplus from your ${formatCurrency(totalBudget, currency)} budget.`;
+    }
+    return transformedDays;
+  }
+
+  // Convert stop costs to target currency and cap scaling so prices never artificially explode
+  for (const day of transformedDays) {
+    for (const stop of day.stops) {
+      if (stop.estimatedCost > 0) {
+        stop.estimatedCost = Math.max(
+          1,
+          convertFromEurBase(stop.estimatedCost, currency)
+        );
+      }
+    }
+  }
+
+  const rawStopsSum = transformedDays
+    .flatMap((d) => d.stops)
+    .reduce((acc, s) => acc + Number(s.estimatedCost || 0), 0);
+  const fullRealistic = accommodationCost + transportCost + rawStopsSum;
+
+  if (totalBudget > fullRealistic * 1.6 && transformedDays.length > 0) {
+    const surplus = Math.max(0, totalBudget - fullRealistic);
+    transformedDays[0].dailyBriefing.vibeSummary = `${transformedDays[0].dailyBriefing.vibeSummary} Budget Surplus Note: Estimated expenses in ${destination} total ${formatCurrency(
+      fullRealistic,
+      currency
+    )}, leaving a ${formatCurrency(
+      surplus,
+      currency
+    )} surplus from your ${formatCurrency(totalBudget, currency)} budget.`;
   }
 
   return transformedDays;
@@ -2903,6 +3860,7 @@ export function buildFallbackCityTemplate(params: {
 } {
   const destLower = params.destination.toLowerCase().trim();
   const requestedDays = Math.max(1, Math.min(7, params.daysCount || 3));
+  const currency = params.currency || 'EUR';
   const defaultBudgetByPersonality: Record<TravelPersonality, number> = {
     Luxury: 3800,
     Foodie: 1450,
@@ -2923,6 +3881,8 @@ export function buildFallbackCityTemplate(params: {
     const { accommodation, dailyTransport } =
       buildRecommendedAccommodationAndTransit({
         destination: 'Istanbul',
+        country: 'Turkey',
+        currency,
         centerLat: 41.0082,
         centerLng: 28.9784,
         personality: params.personality,
@@ -2931,6 +3891,8 @@ export function buildFallbackCityTemplate(params: {
       });
     const profiledDays = applyPersonalityProfileToDays(rawDays, {
       destination: 'Istanbul',
+      country: 'Turkey',
+      currency,
       personality: params.personality,
       totalBudget: effectiveBudget,
       accommodationCost: accommodation.totalStayCost,
@@ -2953,7 +3915,7 @@ export function buildFallbackCityTemplate(params: {
     };
   }
 
-  // Check if destination matches any of our rich multi-day blueprints (Madrid, Shiraz, Rome, Paris, Barcelona)
+  // Check if destination matches any of our rich multi-day blueprints (Madrid, Shiraz, Dehdasht, Yasuj, Kashan, Mombasa, Rome, Paris, Barcelona)
   const blueprintKey = Object.keys(CITY_BLUEPRINTS).find((k) =>
     destLower.includes(k)
   );
@@ -3018,6 +3980,8 @@ export function buildFallbackCityTemplate(params: {
     const { accommodation, dailyTransport } =
       buildRecommendedAccommodationAndTransit({
         destination: bp.destination,
+        country: bp.country,
+        currency,
         centerLat: bp.centerLat,
         centerLng: bp.centerLng,
         personality: params.personality,
@@ -3027,6 +3991,8 @@ export function buildFallbackCityTemplate(params: {
 
     const profiledDays = applyPersonalityProfileToDays(days, {
       destination: bp.destination,
+      country: bp.country,
+      currency,
       personality: params.personality,
       totalBudget: effectiveBudget,
       accommodationCost: accommodation.totalStayCost,
@@ -3303,6 +4269,8 @@ export function buildFallbackCityTemplate(params: {
     const { accommodation, dailyTransport } =
       buildRecommendedAccommodationAndTransit({
         destination: 'Tokyo',
+        country: 'Japan',
+        currency,
         centerLat: 35.6762,
         centerLng: 139.6503,
         daysCount: requestedDays,
@@ -3313,6 +4281,8 @@ export function buildFallbackCityTemplate(params: {
       tokyoDaysPool.slice(0, requestedDays),
       {
         destination: 'Tokyo',
+        country: 'Japan',
+        currency,
         personality: params.personality,
         totalBudget: effectiveBudget,
         accommodationCost: accommodation.totalStayCost,
@@ -3566,6 +4536,8 @@ export function buildFallbackCityTemplate(params: {
   const { accommodation, dailyTransport } =
     buildRecommendedAccommodationAndTransit({
       destination: cityLabel,
+      country: countryLabel,
+      currency,
       centerLat: cLat,
       centerLng: cLng,
       daysCount: requestedDays,
@@ -3574,6 +4546,8 @@ export function buildFallbackCityTemplate(params: {
     });
   const profiledDays = applyPersonalityProfileToDays(days, {
     destination: cityLabel,
+    country: countryLabel,
+    currency,
     personality: params.personality,
     totalBudget: effectiveBudget,
     accommodationCost: accommodation.totalStayCost,

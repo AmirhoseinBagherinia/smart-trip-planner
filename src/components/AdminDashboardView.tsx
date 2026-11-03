@@ -186,7 +186,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </span>
             </div>
             <div className="text-xs opacity-85 tabular-nums">
-              Environment Key Present: {aiStatus?.apiKeyConfigured ? 'Yes' : 'No'} · Active Model: <span className="font-mono">{aiStatus?.activeModel || 'gemini-3-flash-preview'}</span>
+              Environment Key Present: {aiStatus?.apiKeyConfigured ? 'Yes' : 'No'} · Active Model: <span className="font-mono">{aiStatus?.activeModel || 'gemini-3.8-flash'}</span> · Search Grounding: Enabled
               {aiStatus?.lastError
                 ? ` · Last API Diagnostic: ${aiStatus.lastError}`
                 : ' · Zero API errors recorded'}

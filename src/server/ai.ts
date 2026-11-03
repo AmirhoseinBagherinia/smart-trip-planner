@@ -37,6 +37,8 @@ import {
   buildDefaultPackingList,
   buildFallbackCityTemplate,
   buildRecommendedAccommodationAndTransit,
+  convertFromEurBase,
+  getDestinationEconomyProfile,
   resolveDynamicCityCoordinates,
 } from './templates.ts';
 import { groundAndEnrichDays, validateTripSchedule } from './validator.ts';
@@ -44,7 +46,6 @@ import { groundAndEnrichDays, validateTripSchedule } from './validator.ts';
 const MODEL_CANDIDATES = [
   'gemini-3.8-flash',
   'gemini-flash-latest',
-  'gemini-2.5-flash',
   'gemini-3.1-flash-lite',
 ];
 
@@ -157,10 +158,28 @@ function makeCacheKey(prefix: string, payload: unknown): string {
   return `${prefix}:${hash}`;
 }
 
+function extractJsonObject<T>(rawText: string): T {
+  const trimmed = rawText
+    .replace(/^```json\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim();
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1)) as T;
+    }
+    throw new Error('INVALID_AI_JSON_OUTPUT');
+  }
+}
+
 async function callGeminiStructured<T>(params: {
   systemInstruction: string;
   contents: string;
   responseSchema: any;
+  enableGoogleSearch?: boolean;
   timeoutMs?: number;
 }): Promise<{ data: T; modelUsed: string; estimatedTokens: number }> {
   const ai = getGeminiClient();
@@ -175,7 +194,8 @@ async function callGeminiStructured<T>(params: {
     throw new Error('GEMINI_API_KEY_NOT_CONFIGURED');
   }
 
-  const timeoutMs = params.timeoutMs ?? 35_000;
+  const timeoutMs = params.timeoutMs ?? 38_000;
+  const useSearch = params.enableGoogleSearch ?? true;
   let lastErrorMsg = '';
 
   for (const modelName of MODEL_CANDIDATES) {
@@ -190,30 +210,53 @@ async function callGeminiStructured<T>(params: {
         responseSchema: params.responseSchema,
       };
 
+      if (useSearch) {
+        configObj.tools = [{ googleSearch: {} }];
+      }
+
       if (modelName.startsWith('gemini-3.8')) {
         configObj.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
       }
 
-      const callPromise = ai.models.generateContent({
-        model: modelName,
-        contents: params.contents,
-        config: configObj,
-      });
+      let response: any;
+      try {
+        const callPromise = ai.models.generateContent({
+          model: modelName,
+          contents: params.contents,
+          config: configObj,
+        });
+        response = await Promise.race([callPromise, timeoutPromise]);
+      } catch (innerErr: any) {
+        const innerMsg = String(innerErr?.message || innerErr || '');
+        // If endpoint rejects combining googleSearch with responseSchema, retry with googleSearch and JSON prompt enforcement
+        if (useSearch && innerMsg.includes('400')) {
+          const fallbackConfig: any = {
+            systemInstruction: `${params.systemInstruction}\nReturn ONLY a valid JSON object matching the requested schema, with no markdown prose outside the JSON.`,
+            tools: [{ googleSearch: {} }],
+          };
+          if (modelName.startsWith('gemini-3.8')) {
+            fallbackConfig.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+          }
+          const retryPromise = ai.models.generateContent({
+            model: modelName,
+            contents: params.contents,
+            config: fallbackConfig,
+          });
+          response = await Promise.race([retryPromise, timeoutPromise]);
+        } else {
+          throw innerErr;
+        }
+      }
 
-      const response = await Promise.race([callPromise, timeoutPromise]);
       const rawText = (response.text ?? '').trim();
       if (!rawText) {
         throw new Error('EMPTY_AI_RESPONSE');
       }
-      const cleanJson = rawText
-        .replace(/^```json\s*/i, '')
-        .replace(/```\s*$/, '')
-        .trim();
-      const parsed = JSON.parse(cleanJson) as T;
+      const parsed = extractJsonObject<T>(rawText);
       const estimatedTokens = Math.round(
         (params.systemInstruction.length +
           params.contents.length +
-          cleanJson.length) /
+          rawText.length) /
           4
       );
 
@@ -352,7 +395,7 @@ export async function generateTripItineraryAI(params: {
   // Resolve real target city coordinates upfront so grounding & fallback always match the exact city
   const dynamicCityInfo = await resolveDynamicCityCoordinates(params.destination);
 
-  const cacheKey = makeCacheKey('itinerary_gen_v3', {
+  const cacheKey = makeCacheKey('itinerary_gen_v3_8', {
     freeTextPrompt: params.freeTextPrompt,
     destination: params.destination.toLowerCase().trim(),
     startDate: params.startDate,
@@ -416,20 +459,39 @@ export async function generateTripItineraryAI(params: {
       systemInstruction: prompt.systemInstruction,
       contents: prompt.contents,
       responseSchema: ITINERARY_RESPONSE_SCHEMA,
+      enableGoogleSearch: true,
     });
 
+    const resolvedDest = data.destination || dynamicCityInfo.city;
+    const resolvedCountry = data.country || dynamicCityInfo.country;
     const targetLat = Number(data.centerLat || dynamicCityInfo.lat);
     const targetLng = Number(data.centerLng || dynamicCityInfo.lng);
     const seenStopNames = new Set<string>();
+    const economy = getDestinationEconomyProfile(resolvedDest, resolvedCountry);
 
     const defaultBase = buildRecommendedAccommodationAndTransit({
-      destination: data.destination || dynamicCityInfo.city,
+      destination: resolvedDest,
+      country: resolvedCountry,
       centerLat: targetLat,
       centerLng: targetLng,
       daysCount: params.daysCount,
       personality: params.personality,
       totalBudget: params.totalBudget,
+      currency: params.currency,
     });
+
+    let nightlyRate = Number(
+      data.accommodation?.nightlyRate || defaultBase.accommodation.nightlyRate
+    );
+    if (economy.tier === 'iran_local') {
+      const minStay = convertFromEurBase(15, params.currency);
+      const maxStay = convertFromEurBase(35, params.currency);
+      nightlyRate = Math.min(maxStay, Math.max(minStay, nightlyRate));
+    }
+    const nights = Math.max(
+      1,
+      Number(data.accommodation?.nights || defaultBase.accommodation.nights)
+    );
 
     const accommodation: RecommendedAccommodation = {
       name: data.accommodation?.name || defaultBase.accommodation.name,
@@ -437,16 +499,9 @@ export async function generateTripItineraryAI(params: {
         data.accommodation?.neighborhood ||
         defaultBase.accommodation.neighborhood,
       style: data.accommodation?.style || defaultBase.accommodation.style,
-      nightlyRate: Number(
-        data.accommodation?.nightlyRate || defaultBase.accommodation.nightlyRate
-      ),
-      nights: Number(
-        data.accommodation?.nights || defaultBase.accommodation.nights
-      ),
-      totalStayCost: Number(
-        data.accommodation?.totalStayCost ||
-          defaultBase.accommodation.totalStayCost
-      ),
+      nightlyRate,
+      nights,
+      totalStayCost: nightlyRate * nights,
       bookingNote:
         data.accommodation?.bookingNote ||
         defaultBase.accommodation.bookingNote,
@@ -454,18 +509,22 @@ export async function generateTripItineraryAI(params: {
       lng: Number(data.accommodation?.lng || defaultBase.accommodation.lng),
     };
 
+    let dailyCostPerDay = Number(
+      data.dailyTransport?.dailyCostPerDay ||
+        defaultBase.dailyTransport.dailyCostPerDay
+    );
+    if (economy.tier === 'iran_local') {
+      const minTrans = convertFromEurBase(3, params.currency);
+      const maxTrans = convertFromEurBase(8, params.currency);
+      dailyCostPerDay = Math.min(maxTrans, Math.max(minTrans, dailyCostPerDay));
+    }
+
     const dailyTransport: DailyTransportPlan = {
       modeSummary:
         data.dailyTransport?.modeSummary ||
         defaultBase.dailyTransport.modeSummary,
-      dailyCostPerDay: Number(
-        data.dailyTransport?.dailyCostPerDay ||
-          defaultBase.dailyTransport.dailyCostPerDay
-      ),
-      totalTransportCost: Number(
-        data.dailyTransport?.totalTransportCost ||
-          defaultBase.dailyTransport.totalTransportCost
-      ),
+      dailyCostPerDay,
+      totalTransportCost: dailyCostPerDay * Math.max(1, params.daysCount),
       notes: data.dailyTransport?.notes || defaultBase.dailyTransport.notes,
     };
 
@@ -473,13 +532,13 @@ export async function generateTripItineraryAI(params: {
       (d: any, dayIdx: number) => ({
         dayNumber: d.dayNumber || dayIdx + 1,
         date: d.date || params.startDate,
-        title: d.title || `Day ${dayIdx + 1} in ${params.destination}`,
+        title: d.title || `Day ${dayIdx + 1} in ${resolvedDest}`,
         mysteryModeEnabled: false,
         revealedStopCount: 1,
         dailyBriefing: {
           vibeSummary:
             d.dailyBriefing?.vibeSummary ||
-            `Curated ${params.personality.toLowerCase()} exploration of ${params.destination}.`,
+            `Curated ${params.personality.toLowerCase()} exploration of ${resolvedDest}.`,
           etiquetteTip:
             d.dailyBriefing?.etiquetteTip ||
             'Greet local hosts warmly and carry small change for markets.',
@@ -494,29 +553,46 @@ export async function generateTripItineraryAI(params: {
             seenStopNames.add(key);
             return true;
           })
-          .map((s: any, stopIdx: number) => ({
-            id: `stop-${Date.now()}-${dayIdx}-${stopIdx}`,
-            name: s.name || `${params.destination} Stop ${stopIdx + 1}`,
-            description: s.description || '',
-            category: s.category || 'History & Culture',
-            startTime: s.startTime || '09:30',
-            endTime: s.endTime || '11:30',
-            durationMinutes: 120,
-            travelFromPrevMinutes: 0,
-            distanceFromPrevKm: 0,
-            openingHours: s.openingHours || '09:00-19:00',
-            estimatedCost: Number(s.estimatedCost || 15),
-            lat: Number(s.lat || targetLat + (stopIdx - 1) * 0.005),
-            lng: Number(s.lng || targetLng + (stopIdx - 1) * 0.005),
-            isIndoor: Boolean(s.isIndoor),
-            mysteryClue:
-              s.mysteryClue ||
-              `Follow the local footpath in ${params.destination} to discover our next cultural stop.`,
-            isCompleted: false,
-            upvotes: [params.user.id],
-            downvotes: [],
-            comments: [],
-          })),
+          .map((s: any, stopIdx: number) => {
+            let stopCost = Number(s.estimatedCost ?? 15);
+            if (economy.tier === 'iran_local') {
+              const cat = s.category || 'History & Culture';
+              if (cat === 'Food & Dining' || cat === 'Cafe & Bakery') {
+                stopCost = Math.min(
+                  convertFromEurBase(6, params.currency),
+                  Math.max(convertFromEurBase(2, params.currency), stopCost)
+                );
+              } else {
+                stopCost = Math.min(
+                  convertFromEurBase(6, params.currency),
+                  Math.max(0, stopCost)
+                );
+              }
+            }
+            return {
+              id: `stop-${Date.now()}-${dayIdx}-${stopIdx}`,
+              name: s.name || `${resolvedDest} Stop ${stopIdx + 1}`,
+              description: s.description || '',
+              category: s.category || 'History & Culture',
+              startTime: s.startTime || '09:30',
+              endTime: s.endTime || '11:30',
+              durationMinutes: 120,
+              travelFromPrevMinutes: 0,
+              distanceFromPrevKm: 0,
+              openingHours: s.openingHours || '09:00-19:00',
+              estimatedCost: stopCost,
+              lat: Number(s.lat || targetLat + (stopIdx - 1) * 0.005),
+              lng: Number(s.lng || targetLng + (stopIdx - 1) * 0.005),
+              isIndoor: Boolean(s.isIndoor),
+              mysteryClue:
+                s.mysteryClue ||
+                `Follow the local footpath in ${resolvedDest} to discover our next cultural stop.`,
+              isCompleted: false,
+              upvotes: [params.user.id],
+              downvotes: [],
+              comments: [],
+            };
+          }),
       })
     );
 
@@ -526,6 +602,26 @@ export async function generateTripItineraryAI(params: {
       targetLat,
       targetLng
     );
+
+    const stopsTotal = groundedDays.reduce(
+      (sum, d) => sum + d.stops.reduce((s, st) => s + st.estimatedCost, 0),
+      0
+    );
+    const realisticTotal =
+      accommodation.totalStayCost +
+      dailyTransport.totalTransportCost +
+      stopsTotal;
+
+    if (
+      params.totalBudget > realisticTotal * 1.4 &&
+      groundedDays.length > 0 &&
+      !groundedDays[0].dailyBriefing.vibeSummary
+        .toLowerCase()
+        .includes('surplus')
+    ) {
+      const surplus = Math.max(0, params.totalBudget - realisticTotal);
+      groundedDays[0].dailyBriefing.vibeSummary = `${groundedDays[0].dailyBriefing.vibeSummary} Note: ${resolvedDest} is an exceptional high-value destination — your realistic local expenses total ~${formatCurrency(realisticTotal, params.currency)}, leaving a substantial budget surplus of ${formatCurrency(surplus, params.currency)} from your ${formatCurrency(params.totalBudget, params.currency)} allocation.`;
+    }
 
     const validation = validateTripSchedule({
       days: groundedDays,
@@ -538,12 +634,12 @@ export async function generateTripItineraryAI(params: {
     });
 
     const result = {
-      destination: data.destination || dynamicCityInfo.city,
-      country: data.country || dynamicCityInfo.country,
+      destination: resolvedDest,
+      country: resolvedCountry,
       centerLat: targetLat,
       centerLng: targetLng,
       title:
-        data.title || `${dynamicCityInfo.city} ${params.personality} Journey`,
+        data.title || `${resolvedDest} ${params.personality} Journey`,
       accommodation,
       dailyTransport,
       days: groundedDays,
@@ -575,6 +671,8 @@ export async function generateTripItineraryAI(params: {
       startDate: params.startDate,
       daysCount: params.daysCount,
       personality: params.personality,
+      totalBudget: params.totalBudget,
+      currency: params.currency,
       verifiedPlaces: params.verifiedPlaces,
       dynamicCityInfo,
     });

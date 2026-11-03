@@ -1,4 +1,4 @@
-const CURRENCY_SYMBOLS: Record<string, string> = {
+const PREFIX_CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
   EUR: '€',
   GBP: '£',
@@ -8,12 +8,22 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   CAD: 'CA$',
   AUD: 'A$',
   AED: 'AED ',
-  IRR: 'IRR ',
+};
+
+const SUFFIX_CURRENCY_LABELS: Record<string, string> = {
+  IRR: ' Rials',
+  IRT: ' Tomans',
+  TOMAN: ' Tomans',
+  TOMANS: ' Tomans',
+  RIAL: ' Rials',
+  RIALS: ' Rials',
 };
 
 export function getCurrencySymbol(currencyCode = 'USD'): string {
   const code = String(currencyCode || 'USD').toUpperCase().trim();
-  return CURRENCY_SYMBOLS[code] ?? `${code} `;
+  if (code === 'IRR' || code === 'RIAL' || code === 'RIALS') return 'Rials';
+  if (code === 'IRT' || code === 'TOMAN' || code === 'TOMANS') return 'Tomans';
+  return PREFIX_CURRENCY_SYMBOLS[code] ?? `${code} `;
 }
 
 export function formatCurrency(
@@ -23,21 +33,25 @@ export function formatCurrency(
 ): string {
   const numeric = Number(amount ?? 0);
   const safeVal = Number.isNaN(numeric) ? 0 : numeric;
-  const symbol = getCurrencySymbol(currencyCode);
+  const code = String(currencyCode || 'USD').toUpperCase().trim();
   const absVal = Math.abs(safeVal);
 
-  const formattedNumber = options?.showDecimals
-    ? absVal.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    : Math.round(absVal).toLocaleString();
+  const isSuffix = Boolean(SUFFIX_CURRENCY_LABELS[code]);
+  const formattedNumber =
+    options?.showDecimals && !isSuffix
+      ? absVal.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+      : Math.round(absVal).toLocaleString();
 
-  if (safeVal < 0) {
-    return `-${symbol}${formattedNumber}`;
+  const signPrefix =
+    safeVal < 0 ? '-' : options?.signed && safeVal > 0 ? '+' : '';
+
+  if (isSuffix) {
+    return `${signPrefix}${formattedNumber}${SUFFIX_CURRENCY_LABELS[code]}`;
   }
-  if (options?.signed && safeVal > 0) {
-    return `+${symbol}${formattedNumber}`;
-  }
-  return `${symbol}${formattedNumber}`;
+
+  const symbol = PREFIX_CURRENCY_SYMBOLS[code] ?? `${code} `;
+  return `${signPrefix}${symbol}${formattedNumber}`;
 }
