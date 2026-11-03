@@ -11,7 +11,11 @@ import {
   Users,
 } from 'lucide-react';
 import { Trip, User } from '../types.ts';
-import { formatCurrency, getCurrencySymbol } from '../utils/currency.ts';
+import {
+  formatCurrency,
+  getCurrencySymbol,
+  getSuggestedTripBudget,
+} from '../utils/currency.ts';
 
 interface CollaborationCompromiseViewProps {
   trip: Trip;
@@ -64,6 +68,12 @@ export const CollaborationCompromiseView: React.FC<
   const existingSub = trip.compromiseSubmissions.find(
     (s) => s.userId === currentUser.id
   );
+  const defaultDailyComfort = getSuggestedTripBudget({
+    personality: trip.personality,
+    currency: trip.currency,
+    daysCount: trip.days.length,
+    destination: trip.destination,
+  }).dailyBudget;
   const [wishText, setWishText] = useState(
     existingSub?.personalWish ||
       'Want authentic local street food, sunset viewpoints, and time to linger at historic cafes.'
@@ -72,7 +82,7 @@ export const CollaborationCompromiseView: React.FC<
     existingSub?.preferredPace || 'Balanced'
   );
   const [dailyBudget, setDailyBudget] = useState(
-    String(existingSub?.dailyBudgetComfort || 120)
+    String(existingSub?.dailyBudgetComfort || defaultDailyComfort)
   );
   const [selectedInterests, setSelectedInterests] = useState<string[]>(
     existingSub?.mustHaveInterests || ['Food & Dining', 'History & Culture']

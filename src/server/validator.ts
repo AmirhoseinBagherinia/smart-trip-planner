@@ -96,6 +96,8 @@ export function parseOpeningHoursRange(
 
 /**
  * Grounds stops against the Verified Places catalog and recalculates distances/travel times.
+ * Enforces strict geographic coordinate uniqueness so no two stops ever share identical coordinates
+ * or bounce back and forth between two pins.
  */
 export function groundAndEnrichDays(
   days: TripDay[],
@@ -103,45 +105,91 @@ export function groundAndEnrichDays(
   fallbackCenterLat = 41.0082,
   fallbackCenterLng = 28.9784
 ): TripDay[] {
-  return days.map((day) => {
+  const usedVerifiedPlaceIds = new Set<string>();
+  const globalPlacedCoords: Array<{ lat: number; lng: number }> = [];
+
+  // Well-distributed radial compass offsets (~350m to ~950m) if two stops ever collide
+  const DISTINCT_COMPASS_OFFSETS: Array<[number, number]> = [
+    [0.0034, 0.0031],
+    [-0.0038, 0.0036],
+    [0.0042, -0.0035],
+    [-0.0036, -0.0041],
+    [0.0056, 0.0018],
+    [-0.0052, 0.0024],
+    [0.0025, 0.0058],
+    [-0.0029, -0.0055],
+  ];
+
+  return days.map((day, dayIdx) => {
+    const dayPlacedCoords: Array<{ lat: number; lng: number }> = [];
+
     const enrichedStops: TripStop[] = day.stops.map((stop, idx) => {
       const normalizedStopName = stop.name.toLowerCase().trim();
       const matchedPlace = verifiedPlaces.find((vp) => {
-        const vpName = vp.name.toLowerCase().trim();
-        if (
-          normalizedStopName.includes(vpName) ||
-          vpName.includes(normalizedStopName)
-        ) {
+        if (usedVerifiedPlaceIds.has(vp.id)) return false;
+        if (stop.verifiedPlaceId && stop.verifiedPlaceId === vp.id) {
           return true;
         }
-        if (
-          typeof stop.lat === 'number' &&
-          typeof stop.lng === 'number' &&
-          !Number.isNaN(stop.lat) &&
-          !Number.isNaN(stop.lng)
-        ) {
-          const dist = calculateDistanceKm(stop.lat, stop.lng, vp.lat, vp.lng);
-          return dist <= 0.35;
-        }
-        return false;
+        const vpName = vp.name.toLowerCase().trim();
+        return (
+          normalizedStopName.includes(vpName) ||
+          vpName.includes(normalizedStopName)
+        );
       });
+
+      if (matchedPlace) {
+        usedVerifiedPlaceIds.add(matchedPlace.id);
+      }
 
       let lat = Number(stop.lat);
       let lng = Number(stop.lng);
-      if (matchedPlace) {
+
+      const hasValidStopCoords =
+        !Number.isNaN(lat) &&
+        !Number.isNaN(lng) &&
+        Math.abs(lat) <= 90 &&
+        Math.abs(lng) <= 180 &&
+        !(lat === 0 && lng === 0);
+
+      if (!hasValidStopCoords && matchedPlace) {
         lat = matchedPlace.lat;
         lng = matchedPlace.lng;
-      } else if (
-        Number.isNaN(lat) ||
-        Number.isNaN(lng) ||
-        Math.abs(lat) > 90 ||
-        Math.abs(lng) > 180 ||
-        (lat === 0 && lng === 0)
-      ) {
-        // Offset slightly around city center so map stays grounded
-        lat = Number((fallbackCenterLat + (idx - 1) * 0.008).toFixed(5));
-        lng = Number((fallbackCenterLng + (idx - 1) * 0.009).toFixed(5));
+      } else if (!hasValidStopCoords) {
+        const [dLat, dLng] =
+          DISTINCT_COMPASS_OFFSETS[
+            (dayIdx * 4 + idx) % DISTINCT_COMPASS_OFFSETS.length
+          ];
+        lat = Number((fallbackCenterLat + dLat).toFixed(5));
+        lng = Number((fallbackCenterLng + dLng).toFixed(5));
       }
+
+      // Strict Coordinate Uniqueness Guard: ensure this stop does not share coordinates
+      // with any other stop on the same day or across the itinerary
+      let collisionCheckAttempts = 0;
+      while (
+        collisionCheckAttempts < 8 &&
+        (dayPlacedCoords.some(
+          (c) =>
+            Math.abs(c.lat - lat) < 0.0008 && Math.abs(c.lng - lng) < 0.0008
+        ) ||
+          globalPlacedCoords.some(
+            (c) =>
+              Math.abs(c.lat - lat) < 0.0004 && Math.abs(c.lng - lng) < 0.0004
+          ))
+      ) {
+        const [offLat, offLng] =
+          DISTINCT_COMPASS_OFFSETS[
+            (dayIdx * 5 + idx + collisionCheckAttempts) %
+              DISTINCT_COMPASS_OFFSETS.length
+          ];
+        const scale = 1 + collisionCheckAttempts * 0.45;
+        lat = Number((lat + offLat * scale).toFixed(5));
+        lng = Number((lng + offLng * scale).toFixed(5));
+        collisionCheckAttempts++;
+      }
+
+      dayPlacedCoords.push({ lat, lng });
+      globalPlacedCoords.push({ lat, lng });
 
       const startMin = parseTimeToMinutes(stop.startTime) ?? 9 * 60 + idx * 150;
       const endMin =

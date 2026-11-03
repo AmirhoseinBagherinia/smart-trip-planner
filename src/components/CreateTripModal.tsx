@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { TravelPersonality } from '../types.ts';
-import { getCurrencySymbol } from '../utils/currency.ts';
+import {
+  formatCurrency,
+  getCurrencySymbol,
+  getSuggestedTripBudget,
+} from '../utils/currency.ts';
 
 interface CreateTripModalProps {
   onClose: () => void;
@@ -23,37 +27,31 @@ const PERSONALITIES: {
   id: TravelPersonality;
   label: string;
   desc: string;
-  suggestedBudget: number;
 }[] = [
   {
     id: 'Foodie',
     label: 'Foodie',
     desc: '3–4 culinary stops/day: historic bakeries, food halls, regional dinners & boutique foodie hotel',
-    suggestedBudget: 1450,
   },
   {
     id: 'Adventurer',
     label: 'Adventurer',
-    desc: 'Energetic pace: panoramic viewpoints, bike/kayak excursions, urban hikes & explorer lodge',
-    suggestedBudget: 1350,
+    desc: 'Energetic pace: panoramic viewpoints, nature trails, active excursions & explorer lodge',
   },
   {
     id: 'Slow Traveler',
     label: 'Slow Traveler',
     desc: 'Max 2–3 stops/day, 2-hour café breaks, botanical gardens & tranquil residential sanctuary',
-    suggestedBudget: 1250,
   },
   {
     id: 'Luxury',
     label: 'Luxury',
-    desc: '5-star flagship palace hotel, Michelin fine dining, private VIP tours & chauffeur transfers',
-    suggestedBudget: 3800,
+    desc: '5-star flagship palace hotel, fine dining reservations, private VIP tours & chauffeur transfers',
   },
   {
     id: 'Backpacker',
     label: 'Backpacker',
-    desc: 'Design hostel/guesthouse, street food stalls, free walking tours, parks & public metro pass',
-    suggestedBudget: 550,
+    desc: 'Design hostel/eco-lodge, street food stalls, free walking tours, parks & public transit pass',
   },
 ];
 
@@ -68,10 +66,28 @@ const INTEREST_CHOICES = [
 
 const SAMPLE_PROMPTS = [
   {
+    city: 'Dehdasht',
+    startDate: '2026-11-12',
+    endDate: '2026-11-13',
+    budget: 6500000,
+    currency: 'IRT',
+    personality: 'Foodie' as TravelPersonality,
+    text: '2 days in Dehdasht, Iran, Belad Shapur Historical Town, Safavid Caravanserai, Traditional Nomadic Bazaar, Chashmeh Belqeys Garden & Dena foothills nature trail',
+  },
+  {
+    city: 'Dehdasht',
+    startDate: '2026-11-12',
+    endDate: '2026-11-13',
+    budget: 800,
+    currency: 'EUR',
+    personality: 'Adventurer' as TravelPersonality,
+    text: '2 days in Dehdasht, Iran, Belad Shapur Historical Town, Chashmeh Belqeys Garden, Dena foothills trail, and local Boomgardi eco-lodge',
+  },
+  {
     city: 'Madrid',
     startDate: '2026-11-12',
     endDate: '2026-11-16',
-    budget: 3800,
+    budget: 1200,
     currency: 'EUR',
     personality: 'Luxury' as TravelPersonality,
     text: '5 days in Madrid, Luxury 5-star Ritz/Four Seasons stay, private Prado & Royal Palace tours, Michelin fine dining',
@@ -80,7 +96,7 @@ const SAMPLE_PROMPTS = [
     city: 'Madrid',
     startDate: '2026-11-12',
     endDate: '2026-11-16',
-    budget: 1450,
+    budget: 530,
     currency: 'EUR',
     personality: 'Foodie' as TravelPersonality,
     text: '5 days in Madrid, Mercado de San Miguel, historic churros at San Ginés, La Latina tapas, and Prado Museum',
@@ -89,7 +105,7 @@ const SAMPLE_PROMPTS = [
     city: 'Istanbul',
     startDate: '2026-11-12',
     endDate: '2026-11-15',
-    budget: 1350,
+    budget: 460,
     currency: 'USD',
     personality: 'Foodie' as TravelPersonality,
     text: '4 days in Istanbul, relaxed food and history, Spice Bazaar & Kadikoy markets, medium budget',
@@ -98,28 +114,10 @@ const SAMPLE_PROMPTS = [
     city: 'Paris',
     startDate: '2026-11-12',
     endDate: '2026-11-14',
-    budget: 1250,
+    budget: 220,
     currency: 'EUR',
     personality: 'Slow Traveler' as TravelPersonality,
     text: '3 days in Paris, unhurried Left Bank art galleries, covered food markets, and Luxembourg gardens',
-  },
-  {
-    city: 'Dehdasht',
-    startDate: '2026-11-12',
-    endDate: '2026-11-13',
-    budget: 800,
-    currency: 'EUR',
-    personality: 'Foodie' as TravelPersonality,
-    text: '2 days in Dehdasht, Iran, Belqeys Historical Old Town, Safavid Caravanserai, local Boomgardi eco-lodge & authentic regional cuisine',
-  },
-  {
-    city: 'Tokyo',
-    startDate: '2026-11-12',
-    endDate: '2026-11-14',
-    budget: 1350,
-    currency: 'USD',
-    personality: 'Adventurer' as TravelPersonality,
-    text: '3 days in Tokyo, Tsukiji outer market breakfast, Asakusa temples, and Shibuya Sky observation deck',
   },
 ];
 
@@ -135,7 +133,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
   const [startDate, setStartDate] = useState('2026-11-12');
   const [endDate, setEndDate] = useState('2026-11-16');
   const [travelersCount, setTravelersCount] = useState('2');
-  const [totalBudget, setTotalBudget] = useState('1450');
+  const [totalBudget, setTotalBudget] = useState('530');
   const [currency, setCurrency] = useState('EUR');
   const [personality, setPersonality] = useState<TravelPersonality>('Foodie');
   const [interests, setInterests] = useState<string[]>([
@@ -145,10 +143,43 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
   ]);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const daysCount = Math.max(
+    1,
+    Math.min(
+      14,
+      Math.round(
+        (new Date(endDate).getTime() - new Date(startDate).getTime()) /
+          (1000 * 60 * 60 * 24)
+      ) + 1 || 4
+    )
+  );
+
   const toggleInterest = (item: string) => {
     setInterests((prev) =>
       prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]
     );
+  };
+
+  const handleCurrencyChange = (newCurrency: string) => {
+    setCurrency(newCurrency);
+    const suggested = getSuggestedTripBudget({
+      personality,
+      currency: newCurrency,
+      daysCount,
+      destination,
+    });
+    setTotalBudget(String(suggested.totalBudget));
+  };
+
+  const handleDestinationChange = (newDest: string) => {
+    setDestination(newDest);
+    const suggested = getSuggestedTripBudget({
+      personality,
+      currency,
+      daysCount,
+      destination: newDest,
+    });
+    setTotalBudget(String(suggested.totalBudget));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -159,8 +190,8 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
       return;
     }
     const budgetNum = parseFloat(totalBudget);
-    if (Number.isNaN(budgetNum) || budgetNum < 50) {
-      setErrorMsg('Total budget must be at least 50.');
+    if (Number.isNaN(budgetNum) || budgetNum < 20) {
+      setErrorMsg('Please enter a valid total trip budget.');
       return;
     }
 
@@ -218,7 +249,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
               rows={2}
               value={freeTextPrompt}
               onChange={(e) => setFreeTextPrompt(e.target.value)}
-              placeholder="e.g., 4 days in Istanbul, relaxed, food and history, medium budget"
+              placeholder="e.g., 2 days in Dehdasht, Iran, Belad Shapur Old Town, Chashmeh Belqeys Garden & Dena foothills"
               className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:border-teal-700"
             />
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -226,7 +257,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
               {SAMPLE_PROMPTS.map((sample) => (
                 <button
                   type="button"
-                  key={`${sample.city}-${sample.personality}`}
+                  key={`${sample.city}-${sample.personality}-${sample.currency}`}
                   onClick={() => {
                     setFreeTextPrompt(sample.text);
                     setDestination(sample.city);
@@ -238,7 +269,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
                   }}
                   className="px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
                 >
-                  {sample.city} ({sample.personality})
+                  {sample.city} ({sample.personality} · {sample.currency})
                 </button>
               ))}
             </div>
@@ -253,8 +284,8 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
               <input
                 type="text"
                 value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                placeholder="Madrid, Istanbul, Paris, Tokyo..."
+                onChange={(e) => handleDestinationChange(e.target.value)}
+                placeholder="Dehdasht, Madrid, Istanbul, Paris..."
                 className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-teal-700"
               />
             </div>
@@ -302,7 +333,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
               </label>
               <input
                 type="number"
-                min={50}
+                min={20}
                 value={totalBudget}
                 onChange={(e) => setTotalBudget(e.target.value)}
                 className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg tabular-nums"
@@ -314,16 +345,16 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
               </label>
               <select
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
+                onChange={(e) => handleCurrencyChange(e.target.value)}
                 className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg"
               >
-                <option value="EUR">EUR (€)</option>
-                <option value="USD">USD ($)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="IRT">IRT (Tomans)</option>
-                <option value="IRR">IRR (Rials)</option>
-                <option value="TRY">TRY (₺)</option>
-                <option value="JPY">JPY (¥)</option>
+                <option value="EUR">EUR (€ · 0.92x USD)</option>
+                <option value="USD">USD ($ · 1.00x base)</option>
+                <option value="GBP">GBP (£ · 0.78x USD)</option>
+                <option value="IRT">IRT (Tomans · ~90,000/USD)</option>
+                <option value="IRR">IRR (Rials · ~900,000/USD)</option>
+                <option value="TRY">TRY (₺ · 34.5x USD)</option>
+                <option value="JPY">JPY (¥ · 154x USD)</option>
               </select>
             </div>
           </div>
@@ -331,22 +362,25 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
           {/* Travel Personality Mode (Creative Feature 1) */}
           <div>
             <label className="block text-xs font-semibold text-slate-900 mb-2">
-              Select Travel Personality Mode (Shapes Hotel, Transit, Pacing & Pricing)
+              Select Travel Personality Mode (Scaled to {currency} & {daysCount}-Day Trip)
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
               {PERSONALITIES.map((p) => {
                 const active = personality === p.id;
+                const { dailyBudget, totalBudget: suggestedTotal } =
+                  getSuggestedTripBudget({
+                    personality: p.id,
+                    currency,
+                    daysCount,
+                    destination,
+                  });
                 return (
                   <button
                     type="button"
                     key={p.id}
                     onClick={() => {
                       setPersonality(p.id);
-                      // If budget is still one of the standard defaults, update it to match the chosen personality tier
-                      const defaultBudgets = [550, 850, 950, 1100, 1250, 1350, 1450, 3800];
-                      if (defaultBudgets.includes(Number(totalBudget))) {
-                        setTotalBudget(String(p.suggestedBudget));
-                      }
+                      setTotalBudget(String(suggestedTotal));
                     }}
                     className={`p-3 rounded-lg border text-left transition-colors ${
                       active
@@ -354,15 +388,18 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({
                         : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-1">
                       <span className="text-xs font-bold text-slate-900">
                         {p.label}
                       </span>
                       <span className="text-[11px] font-mono text-teal-800 tabular-nums">
-                        ~{currency === 'IRT' || currency === 'IRR' ? `${p.suggestedBudget.toLocaleString()} ${getCurrencySymbol(currency)}` : `${getCurrencySymbol(currency)}${p.suggestedBudget}`}
+                        ~{formatCurrency(dailyBudget, currency)}/d
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                    <div className="text-[10px] font-mono text-slate-500 mt-0.5 tabular-nums">
+                      Est. {daysCount}d total: ~{formatCurrency(suggestedTotal, currency)}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-1 leading-snug">
                       {p.desc}
                     </div>
                   </button>

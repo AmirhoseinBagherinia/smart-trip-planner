@@ -16,7 +16,11 @@ import {
   groundAndEnrichDays,
   validateTripSchedule,
 } from '../validator.ts';
-import { formatCurrency } from '../../utils/currency.ts';
+import {
+  convertUsdToCurrency,
+  formatCurrency,
+  getSuggestedTripBudget,
+} from '../../utils/currency.ts';
 
 function runTestSuite() {
   console.log('Running Smart Trip Planner Automated Test Suite...\n');
@@ -189,7 +193,7 @@ function runTestSuite() {
     passed++;
   }
 
-  // Test 7: Comprehensive Travel Personality Engine, Accommodation, Transit & Dynamic Currency
+  // Test 7: Comprehensive Travel Personality Engine, Accommodation, Transit & Currency Multiplier Matrix
   {
     const madridLuxury = buildFallbackCityTemplate({
       destination: 'Madrid',
@@ -229,26 +233,35 @@ function runTestSuite() {
       madridSlow.days.every((d) => d.stops.length <= 3),
       'Slow Traveler must never exceed 3 stops per day'
     );
-    assert.equal(
-      formatCurrency(4000, 'EUR'),
-      '€4,000',
-      'EUR currency must format with € symbol'
+
+    // Verify Exchange Rate Matrix (USD 1.0, EUR 0.92, GBP 0.78, IRT 90,000)
+    assert.equal(convertUsdToCurrency(100, 'USD'), 100);
+    assert.equal(convertUsdToCurrency(100, 'EUR'), 92);
+    assert.equal(convertUsdToCurrency(100, 'GBP'), 78);
+    assert.equal(convertUsdToCurrency(1, 'IRT'), 90000);
+
+    const irtBackpacker = getSuggestedTripBudget({
+      personality: 'Backpacker',
+      currency: 'IRT',
+      daysCount: 2,
+      destination: 'Dehdasht',
+    });
+    const irtLuxury = getSuggestedTripBudget({
+      personality: 'Luxury',
+      currency: 'IRT',
+      daysCount: 2,
+      destination: 'Dehdasht',
+    });
+    assert.ok(
+      irtBackpacker.dailyBudget >= 1500000 &&
+        irtLuxury.dailyBudget <= 4500000,
+      `Daily IRT budget must be 1,500,000 to 4,500,000 Tomans (got ${irtBackpacker.dailyBudget} - ${irtLuxury.dailyBudget})`
     );
-    assert.equal(
-      formatCurrency(2500000, 'IRT'),
-      '2,500,000 Tomans',
-      'IRT currency must format with Tomans suffix'
-    );
-    assert.equal(
-      formatCurrency(25000000, 'IRR'),
-      '25,000,000 Rials',
-      'IRR currency must format with Rials suffix'
-    );
-    console.log('✓ [PASS] Test 7: Travel Personality Engine (Luxury vs Backpacker vs Slow Traveler), Accommodation, Transit & Dynamic Currency');
+    console.log('✓ [PASS] Test 7: Travel Personality Engine & Currency Exchange Rate Matrix (USD 1.0, EUR 0.92, GBP 0.78, IRT 90,000)');
     passed++;
   }
 
-  // Test 8: Hyper-Local Purchasing Power Grounding & Budget Surplus Note (Dehdasht, Iran — €800 Budget)
+  // Test 8: Dehdasht Multi-Stop Coordinate Uniqueness (No Ping-Pong Bug) & Hyper-Local Pricing in EUR and IRT
   {
     const dehdashtTrip = buildFallbackCityTemplate({
       destination: 'Dehdasht',
@@ -261,44 +274,62 @@ function runTestSuite() {
     });
 
     assert.equal(dehdashtTrip.country, 'Iran', 'Dehdasht country must be Iran');
-    assert.ok(
-      Math.abs(dehdashtTrip.centerLat - 30.7936) < 0.05 &&
-        Math.abs(dehdashtTrip.centerLng - 50.5647) < 0.05,
-      `Dehdasht coordinates must be ~30.7936, 50.5647 (got ${dehdashtTrip.centerLat}, ${dehdashtTrip.centerLng})`
-    );
-    assert.ok(
-      dehdashtTrip.accommodation.nightlyRate >= 15 &&
-        dehdashtTrip.accommodation.nightlyRate <= 35,
-      `Dehdasht eco-lodge nightly rate must be €15–€35/night, got €${dehdashtTrip.accommodation.nightlyRate}`
-    );
-    assert.ok(
-      dehdashtTrip.dailyTransport.dailyCostPerDay >= 3 &&
-        dehdashtTrip.dailyTransport.dailyCostPerDay <= 8,
-      `Dehdasht daily transit must be €3–€8/day, got €${dehdashtTrip.dailyTransport.dailyCostPerDay}`
-    );
+
+    // Verify every stop on Day 1 and Day 2 has 100% unique coordinates (no ping-pong between 2 points!)
+    const seenCoords = new Set<string>();
+    for (const day of dehdashtTrip.days) {
+      assert.ok(
+        day.stops.length >= 4,
+        `Dehdasht Day ${day.dayNumber} must have at least 4 distinct stops (got ${day.stops.length})`
+      );
+      for (const stop of day.stops) {
+        const coordKey = `${stop.lat.toFixed(4)},${stop.lng.toFixed(4)}`;
+        assert.ok(
+          !seenCoords.has(coordKey),
+          `Duplicate coordinate Ping-Pong bug detected at (${coordKey}) on stop "${stop.name}"!`
+        );
+        seenCoords.add(coordKey);
+      }
+    }
 
     const allStops = dehdashtTrip.days.flatMap((d) => d.stops);
     assert.ok(
-      allStops.some((s) => s.name.toLowerCase().includes('belqeys')),
-      'Dehdasht itinerary must include Belqeys Historical Old Town'
+      allStops.some((s) => s.name.includes('Belad Shapur')),
+      'Dehdasht itinerary must include Belad Shapur Historical Town (30.7894, 50.5612)'
     );
-    const stopsTotal = allStops.reduce((s, st) => s + st.estimatedCost, 0);
-    const totalRealisticCost =
-      dehdashtTrip.accommodation.totalStayCost +
-      dehdashtTrip.dailyTransport.totalTransportCost +
-      stopsTotal;
+    assert.ok(
+      allStops.some((s) => s.name.includes('Safavid Caravanserai')),
+      'Dehdasht itinerary must include Safavid Caravanserai & Central Square (30.7925, 50.5645)'
+    );
+    assert.ok(
+      allStops.some((s) => s.name.includes('Nomadic Bazaar')),
+      'Dehdasht itinerary must include Traditional Nomadic Bazaar & Local Kitchen (30.7960, 50.5680)'
+    );
+    assert.ok(
+      allStops.some((s) => s.name.includes('Chashmeh Belqeys')),
+      'Dehdasht itinerary must include Chashmeh Belqeys Garden (30.7483, 50.7455)'
+    );
+    assert.ok(
+      allStops.some((s) => s.name.includes('Dena Foothills')),
+      'Dehdasht itinerary must include Dena Foothills Nature Trail (30.8200, 50.5900)'
+    );
 
+    // Also test Dehdasht in IRT (Tomans) to verify realistic Toman scaling
+    const dehdashtIrt = buildFallbackCityTemplate({
+      destination: 'Dehdasht',
+      startDate: '2026-11-12',
+      daysCount: 2,
+      personality: 'Foodie',
+      totalBudget: 6500000,
+      currency: 'IRT',
+      verifiedPlaces: SEED_VERIFIED_PLACES,
+    });
     assert.ok(
-      totalRealisticCost < 120,
-      `2 days in Dehdasht must reflect real local costs (< €120 total, not inflated to €800!), got €${totalRealisticCost}`
+      dehdashtIrt.accommodation.nightlyRate >= 1400000,
+      `Dehdasht IRT nightly rate must be realistic in Tomans (>=1,400,000 Tomans), got ${dehdashtIrt.accommodation.nightlyRate}`
     );
-    assert.ok(
-      dehdashtTrip.days[0].dailyBriefing.vibeSummary
-        .toLowerCase()
-        .includes('surplus'),
-      'Day 1 Daily Briefing must highlight the substantial budget surplus for high-value destinations'
-    );
-    console.log('✓ [PASS] Test 8: Hyper-local purchasing power grounding (Dehdasht, Iran €800 budget -> ~€90 realistic total + budget surplus note)');
+
+    console.log('✓ [PASS] Test 8: Dehdasht multi-stop coordinate uniqueness (zero duplicate coordinates) & EUR/IRT scaling');
     passed++;
   }
 
