@@ -1,6 +1,7 @@
 import React from 'react';
 import { Printer, X } from 'lucide-react';
 import { Trip } from '../types.ts';
+import { formatCurrency } from '../utils/currency.ts';
 
 interface PrintItineraryModalProps {
   trip: Trip;
@@ -11,9 +12,12 @@ export const PrintItineraryModal: React.FC<PrintItineraryModalProps> = ({
   trip,
   onClose,
 }) => {
-  const totalEstimated = trip.days
+  const totalEstimatedStops = trip.days
     .flatMap((d) => d.stops)
     .reduce((acc, s) => acc + Number(s.estimatedCost || 0), 0);
+  const stayCost = trip.accommodation?.totalStayCost ?? 0;
+  const transitCost = trip.dailyTransport?.totalTransportCost ?? 0;
+  const totalFullEstimate = totalEstimatedStops + stayCost + transitCost;
   const totalActual = trip.actualExpenses.reduce(
     (acc, e) => acc + Number(e.amount || 0),
     0
@@ -68,10 +72,44 @@ export const PrintItineraryModal: React.FC<PrintItineraryModalProps> = ({
             <div className="text-xs text-slate-600 tabular-nums sm:text-right">
               <div>Invite Code: {trip.inviteCode}</div>
               <div>
-                Budget Cap: {trip.currency} ${trip.totalBudget} (Est. Stops: ${totalEstimated})
+                Budget Cap: {formatCurrency(trip.totalBudget, trip.currency)} (Full Est: {formatCurrency(totalFullEstimate, trip.currency)})
               </div>
             </div>
           </div>
+
+          {/* Accommodation & Daily Transit Summary */}
+          {(trip.accommodation || trip.dailyTransport) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs print-break-inside-avoid">
+              {trip.accommodation && (
+                <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/60 space-y-1">
+                  <div className="font-semibold text-teal-800">
+                    Recommended Base Accommodation ({trip.accommodation.style})
+                  </div>
+                  <div className="font-bold text-slate-900">
+                    {trip.accommodation.name} — {trip.accommodation.neighborhood}
+                  </div>
+                  <div className="text-slate-600 tabular-nums">
+                    {formatCurrency(trip.accommodation.nightlyRate, trip.currency)}/night × {trip.accommodation.nights} nights ={' '}
+                    <strong>{formatCurrency(trip.accommodation.totalStayCost, trip.currency)}</strong>
+                  </div>
+                </div>
+              )}
+              {trip.dailyTransport && (
+                <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/60 space-y-1">
+                  <div className="font-semibold text-teal-800">
+                    Daily Local Transit Plan
+                  </div>
+                  <div className="font-bold text-slate-900">
+                    {trip.dailyTransport.modeSummary}
+                  </div>
+                  <div className="text-slate-600 tabular-nums">
+                    {formatCurrency(trip.dailyTransport.dailyCostPerDay, trip.currency)}/day ={' '}
+                    <strong>{formatCurrency(trip.dailyTransport.totalTransportCost, trip.currency)}</strong>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Day-by-Day Schedule */}
           <div className="space-y-6">
@@ -110,7 +148,7 @@ export const PrintItineraryModal: React.FC<PrintItineraryModalProps> = ({
                           {idx + 1}. {stop.startTime}–{stop.endTime} · {stop.name}
                         </span>
                         <span>
-                          ${stop.estimatedCost} · Open {stop.openingHours}
+                          {formatCurrency(stop.estimatedCost, trip.currency)} · Open {stop.openingHours}
                         </span>
                       </div>
                       <p className="text-slate-600 mt-0.5">{stop.description}</p>
@@ -130,25 +168,25 @@ export const PrintItineraryModal: React.FC<PrintItineraryModalProps> = ({
           {/* Budget Summary */}
           <div className="space-y-3 print-break-inside-avoid">
             <h2 className="text-base font-bold text-slate-900 border-b border-slate-200 pb-2">
-              2. Budget & Expense Summary
+              2. Budget & Expense Summary ({trip.currency})
             </h2>
             <div className="grid grid-cols-3 gap-4 text-xs tabular-nums">
               <div className="p-3 rounded border border-slate-200">
                 <div className="text-slate-500">Total Trip Budget</div>
                 <div className="text-base font-bold text-slate-900 mt-0.5">
-                  ${trip.totalBudget}
+                  {formatCurrency(trip.totalBudget, trip.currency)}
                 </div>
               </div>
               <div className="p-3 rounded border border-slate-200">
-                <div className="text-slate-500">Estimated Itinerary Stops</div>
+                <div className="text-slate-500">Full Trip Estimate (Stay + Transit + Stops)</div>
                 <div className="text-base font-bold text-slate-900 mt-0.5">
-                  ${totalEstimated}
+                  {formatCurrency(totalFullEstimate, trip.currency)}
                 </div>
               </div>
               <div className="p-3 rounded border border-slate-200">
                 <div className="text-slate-500">Actual Logged Expenses</div>
                 <div className="text-base font-bold text-slate-900 mt-0.5">
-                  ${totalActual.toFixed(2)}
+                  {formatCurrency(totalActual, trip.currency, { showDecimals: true })}
                 </div>
               </div>
             </div>

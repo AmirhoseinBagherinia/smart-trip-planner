@@ -1,11 +1,13 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import crypto from 'crypto';
 import {
   CompromiseResult,
   CompromiseSubmission,
+  DailyTransportPlan,
   DiaryMemoryNote,
   DiaryStory,
   PackingItem,
+  RecommendedAccommodation,
   TravelPersonality,
   Trip,
   TripDay,
@@ -13,6 +15,7 @@ import {
   VerifiedPlace,
   WeatherForecastDay,
 } from '../types.ts';
+import { formatCurrency } from '../utils/currency.ts';
 import { db } from './db.ts';
 import {
   buildChatReplanPrompt,
@@ -33,11 +36,63 @@ import {
   buildDefaultDiaryStory,
   buildDefaultPackingList,
   buildFallbackCityTemplate,
+  buildRecommendedAccommodationAndTransit,
+  resolveDynamicCityCoordinates,
 } from './templates.ts';
 import { groundAndEnrichDays, validateTripSchedule } from './validator.ts';
 
-const PRIMARY_MODEL = 'gemini-2.5-flash';
-const FALLBACK_MODEL = 'gemini-3.8-flash';
+const MODEL_CANDIDATES = [
+  'gemini-3.8-flash',
+  'gemini-flash-latest',
+  'gemini-2.5-flash',
+  'gemini-3.1-flash-lite',
+];
+
+export interface AiConnectionStatus {
+  apiKeyConfigured: boolean;
+  activeModel: string;
+  mode: 'live_connected' | 'fallback_active';
+  lastError: string | null;
+  lastCheckedAt: string;
+}
+
+let connectionState: AiConnectionStatus = {
+  apiKeyConfigured: false,
+  activeModel: MODEL_CANDIDATES[0],
+  mode: 'live_connected',
+  lastError: null,
+  lastCheckedAt: new Date().toISOString(),
+};
+
+function resolveServerApiKey(): string | null {
+  const candidates = [
+    process.env.GEMINI_API_KEY,
+    process.env.GOOGLE_API_KEY,
+    process.env.API_KEY,
+  ];
+  for (const key of candidates) {
+    if (
+      key &&
+      typeof key === 'string' &&
+      key.trim() !== '' &&
+      key.trim() !== 'MY_GEMINI_API_KEY'
+    ) {
+      return key.trim();
+    }
+  }
+  return null;
+}
+
+export function getAiConnectionStatus(): AiConnectionStatus {
+  const key = resolveServerApiKey();
+  connectionState.apiKeyConfigured = Boolean(key);
+  if (!key && !connectionState.lastError) {
+    connectionState.mode = 'fallback_active';
+    connectionState.lastError =
+      'GEMINI_API_KEY is not set in environment secrets; using grounded city blueprint engine.';
+  }
+  return { ...connectionState };
+}
 
 // Rolling 60-second per-user rate limiter
 const userRequestTimestamps = new Map<string, number[]>();
@@ -79,8 +134,8 @@ export function resetRateLimitForTest(userId?: string): void {
 }
 
 function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
+  const apiKey = resolveServerApiKey();
+  if (!apiKey) {
     return null;
   }
   return new GoogleGenAI({
@@ -110,49 +165,90 @@ async function callGeminiStructured<T>(params: {
 }): Promise<{ data: T; modelUsed: string; estimatedTokens: number }> {
   const ai = getGeminiClient();
   if (!ai) {
+    connectionState = {
+      apiKeyConfigured: false,
+      activeModel: MODEL_CANDIDATES[0],
+      mode: 'fallback_active',
+      lastError: 'GEMINI_API_KEY environment variable is missing or empty.',
+      lastCheckedAt: new Date().toISOString(),
+    };
     throw new Error('GEMINI_API_KEY_NOT_CONFIGURED');
   }
 
-  const timeoutMs = params.timeoutMs ?? 18_000;
-  const executeWithModel = async (modelName: string) => {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('AI_REQUEST_TIMEOUT')), timeoutMs)
-    );
+  const timeoutMs = params.timeoutMs ?? 35_000;
+  let lastErrorMsg = '';
 
-    const callPromise = ai.models.generateContent({
-      model: modelName,
-      contents: params.contents,
-      config: {
+  for (const modelName of MODEL_CANDIDATES) {
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('AI_REQUEST_TIMEOUT')), timeoutMs)
+      );
+
+      const configObj: any = {
         systemInstruction: params.systemInstruction,
         responseMimeType: 'application/json',
         responseSchema: params.responseSchema,
-      },
-    });
+      };
 
-    const response = await Promise.race([callPromise, timeoutPromise]);
-    const text = (response.text ?? '').trim();
-    if (!text) {
-      throw new Error('EMPTY_AI_RESPONSE');
-    }
-    const parsed = JSON.parse(text) as T;
-    const estimatedTokens = Math.round(
-      (params.systemInstruction.length +
-        params.contents.length +
-        text.length) /
-        4
-    );
-    return { data: parsed, modelUsed: modelName, estimatedTokens };
-  };
+      if (modelName.startsWith('gemini-3.8')) {
+        configObj.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+      }
 
-  try {
-    return await executeWithModel(PRIMARY_MODEL);
-  } catch (err: any) {
-    const msg = String(err?.message || err || '');
-    if (msg.includes('404') || msg.includes('NOT_FOUND')) {
-      return await executeWithModel(FALLBACK_MODEL);
+      const callPromise = ai.models.generateContent({
+        model: modelName,
+        contents: params.contents,
+        config: configObj,
+      });
+
+      const response = await Promise.race([callPromise, timeoutPromise]);
+      const rawText = (response.text ?? '').trim();
+      if (!rawText) {
+        throw new Error('EMPTY_AI_RESPONSE');
+      }
+      const cleanJson = rawText
+        .replace(/^```json\s*/i, '')
+        .replace(/```\s*$/, '')
+        .trim();
+      const parsed = JSON.parse(cleanJson) as T;
+      const estimatedTokens = Math.round(
+        (params.systemInstruction.length +
+          params.contents.length +
+          cleanJson.length) /
+          4
+      );
+
+      connectionState = {
+        apiKeyConfigured: true,
+        activeModel: modelName,
+        mode: 'live_connected',
+        lastError: null,
+        lastCheckedAt: new Date().toISOString(),
+      };
+
+      return { data: parsed, modelUsed: modelName, estimatedTokens };
+    } catch (err: any) {
+      lastErrorMsg = String(err?.message || err || 'Unknown Gemini error');
+      // Try next candidate model if 404/not found/unsupported
+      if (
+        lastErrorMsg.includes('404') ||
+        lastErrorMsg.includes('NOT_FOUND') ||
+        lastErrorMsg.includes('not supported') ||
+        lastErrorMsg.includes('400')
+      ) {
+        continue;
+      }
+      break;
     }
-    throw err;
   }
+
+  connectionState = {
+    apiKeyConfigured: true,
+    activeModel: MODEL_CANDIDATES[0],
+    mode: 'fallback_active',
+    lastError: lastErrorMsg.slice(0, 220),
+    lastCheckedAt: new Date().toISOString(),
+  };
+  throw new Error(lastErrorMsg || 'GEMINI_CALL_FAILED');
 }
 
 function enforceUserAccess(
@@ -173,7 +269,7 @@ function enforceUserAccess(
       userId: user.id,
       userName: user.name,
       feature,
-      model: PRIMARY_MODEL,
+      model: connectionState.activeModel,
       promptVersion,
       latencyMs: 5,
       estimatedTokens: 0,
@@ -199,7 +295,7 @@ function enforceUserAccess(
       userId: user.id,
       userName: user.name,
       feature,
-      model: PRIMARY_MODEL,
+      model: connectionState.activeModel,
       promptVersion,
       latencyMs: 4,
       estimatedTokens: 0,
@@ -237,12 +333,14 @@ export async function generateTripItineraryAI(params: {
   centerLat: number;
   centerLng: number;
   title: string;
+  accommodation: RecommendedAccommodation;
+  dailyTransport: DailyTransportPlan;
   days: TripDay[];
   usedFallback: boolean;
 }> {
   const snippet =
     params.freeTextPrompt ||
-    `${params.daysCount} days in ${params.destination} (${params.personality}, $${params.totalBudget})`;
+    `${params.daysCount} days in ${params.destination} (${params.personality}, ${formatCurrency(params.totalBudget, params.currency)})`;
   enforceUserAccess(
     params.user,
     'itinerary_generation',
@@ -251,12 +349,16 @@ export async function generateTripItineraryAI(params: {
   );
 
   const startMs = Date.now();
-  const cacheKey = makeCacheKey('itinerary_gen', {
+  // Resolve real target city coordinates upfront so grounding & fallback always match the exact city
+  const dynamicCityInfo = await resolveDynamicCityCoordinates(params.destination);
+
+  const cacheKey = makeCacheKey('itinerary_gen_v3', {
     freeTextPrompt: params.freeTextPrompt,
-    destination: params.destination,
+    destination: params.destination.toLowerCase().trim(),
     startDate: params.startDate,
     daysCount: params.daysCount,
     totalBudget: params.totalBudget,
+    currency: params.currency,
     personality: params.personality,
   });
 
@@ -266,17 +368,26 @@ export async function generateTripItineraryAI(params: {
     centerLat: number;
     centerLng: number;
     title: string;
+    accommodation: RecommendedAccommodation;
+    dailyTransport: DailyTransportPlan;
     days: TripDay[];
   }>(cacheKey);
 
-  if (cached) {
+  if (
+    cached &&
+    cached.destination
+      .toLowerCase()
+      .includes(params.destination.toLowerCase().trim()) &&
+    cached.accommodation &&
+    cached.dailyTransport
+  ) {
     db.addAiLog({
       id: `log-${Date.now()}`,
       timestamp: new Date().toISOString(),
       userId: params.user.id,
       userName: params.user.name,
       feature: 'itinerary_generation',
-      model: PRIMARY_MODEL,
+      model: connectionState.activeModel,
       promptVersion: PROMPT_VERSIONS.itinerary_generation,
       latencyMs: Date.now() - startMs,
       estimatedTokens: 0,
@@ -298,6 +409,8 @@ export async function generateTripItineraryAI(params: {
       centerLat: number;
       centerLng: number;
       title: string;
+      accommodation?: RecommendedAccommodation;
+      dailyTransport?: DailyTransportPlan;
       days: any[];
     }>({
       systemInstruction: prompt.systemInstruction,
@@ -305,17 +418,68 @@ export async function generateTripItineraryAI(params: {
       responseSchema: ITINERARY_RESPONSE_SCHEMA,
     });
 
+    const targetLat = Number(data.centerLat || dynamicCityInfo.lat);
+    const targetLng = Number(data.centerLng || dynamicCityInfo.lng);
+    const seenStopNames = new Set<string>();
+
+    const defaultBase = buildRecommendedAccommodationAndTransit({
+      destination: data.destination || dynamicCityInfo.city,
+      centerLat: targetLat,
+      centerLng: targetLng,
+      daysCount: params.daysCount,
+      personality: params.personality,
+      totalBudget: params.totalBudget,
+    });
+
+    const accommodation: RecommendedAccommodation = {
+      name: data.accommodation?.name || defaultBase.accommodation.name,
+      neighborhood:
+        data.accommodation?.neighborhood ||
+        defaultBase.accommodation.neighborhood,
+      style: data.accommodation?.style || defaultBase.accommodation.style,
+      nightlyRate: Number(
+        data.accommodation?.nightlyRate || defaultBase.accommodation.nightlyRate
+      ),
+      nights: Number(
+        data.accommodation?.nights || defaultBase.accommodation.nights
+      ),
+      totalStayCost: Number(
+        data.accommodation?.totalStayCost ||
+          defaultBase.accommodation.totalStayCost
+      ),
+      bookingNote:
+        data.accommodation?.bookingNote ||
+        defaultBase.accommodation.bookingNote,
+      lat: Number(data.accommodation?.lat || defaultBase.accommodation.lat),
+      lng: Number(data.accommodation?.lng || defaultBase.accommodation.lng),
+    };
+
+    const dailyTransport: DailyTransportPlan = {
+      modeSummary:
+        data.dailyTransport?.modeSummary ||
+        defaultBase.dailyTransport.modeSummary,
+      dailyCostPerDay: Number(
+        data.dailyTransport?.dailyCostPerDay ||
+          defaultBase.dailyTransport.dailyCostPerDay
+      ),
+      totalTransportCost: Number(
+        data.dailyTransport?.totalTransportCost ||
+          defaultBase.dailyTransport.totalTransportCost
+      ),
+      notes: data.dailyTransport?.notes || defaultBase.dailyTransport.notes,
+    };
+
     const normalizedDays: TripDay[] = (data.days || []).map(
       (d: any, dayIdx: number) => ({
         dayNumber: d.dayNumber || dayIdx + 1,
         date: d.date || params.startDate,
-        title: d.title || `Day ${dayIdx + 1} Exploration`,
+        title: d.title || `Day ${dayIdx + 1} in ${params.destination}`,
         mysteryModeEnabled: false,
         revealedStopCount: 1,
         dailyBriefing: {
           vibeSummary:
             d.dailyBriefing?.vibeSummary ||
-            `Curated ${params.personality.toLowerCase()} exploration.`,
+            `Curated ${params.personality.toLowerCase()} exploration of ${params.destination}.`,
           etiquetteTip:
             d.dailyBriefing?.etiquetteTip ||
             'Greet local hosts warmly and carry small change for markets.',
@@ -323,53 +487,65 @@ export async function generateTripItineraryAI(params: {
             d.dailyBriefing?.wearAdvice ||
             'Comfortable walking shoes and breathable layers.',
         },
-        stops: (d.stops || []).map((s: any, stopIdx: number) => ({
-          id: `stop-${Date.now()}-${dayIdx}-${stopIdx}`,
-          name: s.name || `Stop ${stopIdx + 1}`,
-          description: s.description || '',
-          category: s.category || 'History & Culture',
-          startTime: s.startTime || '09:30',
-          endTime: s.endTime || '11:30',
-          durationMinutes: 120,
-          travelFromPrevMinutes: 0,
-          distanceFromPrevKm: 0,
-          openingHours: s.openingHours || '09:00-19:00',
-          estimatedCost: Number(s.estimatedCost || 15),
-          lat: Number(s.lat || data.centerLat || 41.0082),
-          lng: Number(s.lng || data.centerLng || 28.9784),
-          isIndoor: Boolean(s.isIndoor),
-          mysteryClue:
-            s.mysteryClue ||
-            'Follow the local footpath to discover our next cultural stop.',
-          isCompleted: false,
-          upvotes: [params.user.id],
-          downvotes: [],
-          comments: [],
-        })),
+        stops: (d.stops || [])
+          .filter((s: any) => {
+            const key = String(s.name || '').toLowerCase().trim();
+            if (!key || seenStopNames.has(key)) return false;
+            seenStopNames.add(key);
+            return true;
+          })
+          .map((s: any, stopIdx: number) => ({
+            id: `stop-${Date.now()}-${dayIdx}-${stopIdx}`,
+            name: s.name || `${params.destination} Stop ${stopIdx + 1}`,
+            description: s.description || '',
+            category: s.category || 'History & Culture',
+            startTime: s.startTime || '09:30',
+            endTime: s.endTime || '11:30',
+            durationMinutes: 120,
+            travelFromPrevMinutes: 0,
+            distanceFromPrevKm: 0,
+            openingHours: s.openingHours || '09:00-19:00',
+            estimatedCost: Number(s.estimatedCost || 15),
+            lat: Number(s.lat || targetLat + (stopIdx - 1) * 0.005),
+            lng: Number(s.lng || targetLng + (stopIdx - 1) * 0.005),
+            isIndoor: Boolean(s.isIndoor),
+            mysteryClue:
+              s.mysteryClue ||
+              `Follow the local footpath in ${params.destination} to discover our next cultural stop.`,
+            isCompleted: false,
+            upvotes: [params.user.id],
+            downvotes: [],
+            comments: [],
+          })),
       })
     );
 
     const groundedDays = groundAndEnrichDays(
       normalizedDays,
       params.verifiedPlaces,
-      data.centerLat || 41.0082,
-      data.centerLng || 28.9784
+      targetLat,
+      targetLng
     );
 
     const validation = validateTripSchedule({
       days: groundedDays,
       totalBudget: params.totalBudget,
+      currency: params.currency,
       personality: params.personality,
       verifiedPlaces: params.verifiedPlaces,
+      accommodationCost: accommodation.totalStayCost,
+      transportCost: dailyTransport.totalTransportCost,
     });
 
     const result = {
-      destination: data.destination || params.destination,
-      country: data.country || 'International',
-      centerLat: Number(data.centerLat || 41.0082),
-      centerLng: Number(data.centerLng || 28.9784),
+      destination: data.destination || dynamicCityInfo.city,
+      country: data.country || dynamicCityInfo.country,
+      centerLat: targetLat,
+      centerLng: targetLng,
       title:
-        data.title || `${params.destination} ${params.personality} Journey`,
+        data.title || `${dynamicCityInfo.city} ${params.personality} Journey`,
+      accommodation,
+      dailyTransport,
       days: groundedDays,
     };
 
@@ -393,13 +569,14 @@ export async function generateTripItineraryAI(params: {
 
     return { ...result, usedFallback: false };
   } catch (err: any) {
-    // Graceful Fallback to Pre-Validated City Template
+    // Graceful Fallback to Pre-Validated City Template grounded in the exact target city
     const fallback = buildFallbackCityTemplate({
       destination: params.destination,
       startDate: params.startDate,
       daysCount: params.daysCount,
       personality: params.personality,
       verifiedPlaces: params.verifiedPlaces,
+      dynamicCityInfo,
     });
 
     db.addAiLog({
@@ -408,7 +585,7 @@ export async function generateTripItineraryAI(params: {
       userId: params.user.id,
       userName: params.user.name,
       feature: 'itinerary_generation',
-      model: PRIMARY_MODEL,
+      model: connectionState.activeModel,
       promptVersion: PROMPT_VERSIONS.itinerary_generation,
       latencyMs: Date.now() - startMs,
       estimatedTokens: 0,
@@ -417,7 +594,7 @@ export async function generateTripItineraryAI(params: {
       validationIssueCount: 0,
       status: 'fallback',
       promptSnippet: snippet.slice(0, 140),
-      notes: `Served pre-validated city template (${String(err?.message || 'API unavailable').slice(0, 60)})`,
+      notes: `Grounded blueprint for ${fallback.destination} (${String(err?.message || 'API unavailable').slice(0, 80)})`,
     });
 
     return { ...fallback, usedFallback: true };
@@ -526,8 +703,11 @@ export async function chatMutateItineraryAI(params: {
     const validation = validateTripSchedule({
       days: grounded,
       totalBudget: params.trip.totalBudget,
+      currency: params.trip.currency,
       personality: params.trip.personality,
       verifiedPlaces: params.verifiedPlaces,
+      accommodationCost: params.trip.accommodation?.totalStayCost ?? 0,
+      transportCost: params.trip.dailyTransport?.totalTransportCost ?? 0,
     });
 
     db.addAiLog({
@@ -566,7 +746,7 @@ export async function chatMutateItineraryAI(params: {
       userId: params.user.id,
       userName: params.user.name,
       feature: 'chat_replan',
-      model: PRIMARY_MODEL,
+      model: connectionState.activeModel,
       promptVersion: PROMPT_VERSIONS.chat_replan,
       latencyMs: Date.now() - startMs,
       estimatedTokens: 0,
@@ -575,7 +755,7 @@ export async function chatMutateItineraryAI(params: {
       validationIssueCount: 0,
       status: 'fallback',
       promptSnippet: params.userMessage.slice(0, 140),
-      notes: 'Applied deterministic smart re-planner',
+      notes: `Applied deterministic smart re-planner (${String(err?.message || '').slice(0, 60)})`,
     });
 
     return {
@@ -644,7 +824,7 @@ export async function generatePackingListAI(params: {
     });
 
     return { items, usedFallback: false };
-  } catch {
+  } catch (err: any) {
     const items = buildDefaultPackingList(params.trip, params.weather);
     db.addAiLog({
       id: `log-${Date.now()}`,
@@ -652,7 +832,7 @@ export async function generatePackingListAI(params: {
       userId: params.user.id,
       userName: params.user.name,
       feature: 'packing_list',
-      model: PRIMARY_MODEL,
+      model: connectionState.activeModel,
       promptVersion: PROMPT_VERSIONS.packing_list,
       latencyMs: Date.now() - startMs,
       estimatedTokens: 0,
@@ -661,7 +841,7 @@ export async function generatePackingListAI(params: {
       validationIssueCount: 0,
       status: 'fallback',
       promptSnippet: snippet,
-      notes: 'Used weather-grounded packing template',
+      notes: `Used weather-grounded packing template (${String(err?.message || '').slice(0, 60)})`,
     });
     return { items, usedFallback: true };
   }
@@ -733,15 +913,18 @@ export async function negotiateGroupCompromiseAI(params: {
     });
 
     return { compromiseResult, usedFallback: false };
-  } catch {
-    const compromiseResult = buildDefaultCompromiseResult(params.submissions);
+  } catch (err: any) {
+    const compromiseResult = buildDefaultCompromiseResult(
+      params.submissions,
+      params.trip
+    );
     db.addAiLog({
       id: `log-${Date.now()}`,
       timestamp: new Date().toISOString(),
       userId: params.user.id,
       userName: params.user.name,
       feature: 'group_compromise',
-      model: PRIMARY_MODEL,
+      model: connectionState.activeModel,
       promptVersion: PROMPT_VERSIONS.group_compromise,
       latencyMs: Date.now() - startMs,
       estimatedTokens: 0,
@@ -750,7 +933,7 @@ export async function negotiateGroupCompromiseAI(params: {
       validationIssueCount: 0,
       status: 'fallback',
       promptSnippet: snippet,
-      notes: 'Used balanced multi-party compromise resolver',
+      notes: `Used balanced multi-party compromise resolver (${String(err?.message || '').slice(0, 60)})`,
     });
     return { compromiseResult, usedFallback: true };
   }
@@ -811,7 +994,7 @@ export async function generateTravelDiaryAI(params: {
     });
 
     return { story, usedFallback: false };
-  } catch {
+  } catch (err: any) {
     const story = buildDefaultDiaryStory(params.trip, params.notes);
     db.addAiLog({
       id: `log-${Date.now()}`,
@@ -819,7 +1002,7 @@ export async function generateTravelDiaryAI(params: {
       userId: params.user.id,
       userName: params.user.name,
       feature: 'travel_diary',
-      model: PRIMARY_MODEL,
+      model: connectionState.activeModel,
       promptVersion: PROMPT_VERSIONS.travel_diary,
       latencyMs: Date.now() - startMs,
       estimatedTokens: 0,
@@ -828,7 +1011,7 @@ export async function generateTravelDiaryAI(params: {
       validationIssueCount: 0,
       status: 'fallback',
       promptSnippet: snippet,
-      notes: 'Used editorial travelogue generator',
+      notes: `Used editorial travelogue generator (${String(err?.message || '').slice(0, 60)})`,
     });
     return { story, usedFallback: true };
   }

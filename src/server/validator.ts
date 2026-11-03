@@ -241,10 +241,29 @@ export function autoFixScheduleTimings(days: TripDay[]): TripDay[] {
 export function validateTripSchedule(params: {
   days: TripDay[];
   totalBudget: number;
+  currency?: string;
+  accommodationCost?: number;
+  transportCost?: number;
   personality: TravelPersonality;
   verifiedPlaces: VerifiedPlace[];
 }): ScheduleValidationResult {
-  const { days, totalBudget, personality, verifiedPlaces } = params;
+  const {
+    days,
+    totalBudget,
+    currency = 'USD',
+    accommodationCost = 0,
+    transportCost = 0,
+    personality,
+    verifiedPlaces,
+  } = params;
+  const currencyMap: Record<string, string> = {
+    USD: '$',
+    EUR: '€',
+    GBP: '£',
+    TRY: '₺',
+    JPY: '¥',
+  };
+  const sym = currencyMap[currency.toUpperCase()] || `${currency} `;
   const issues: ValidationIssue[] = [];
   let totalEstimatedCost = 0;
   let totalStops = 0;
@@ -377,14 +396,18 @@ export function validateTripSchedule(params: {
     }
   }
 
-  // 4. Check budget overrun
+  const totalTripEstimatedCost =
+    Math.round((totalEstimatedCost + accommodationCost + transportCost) * 100) /
+    100;
+
+  // 4. Check budget overrun against total trip budget
   if (totalBudget > 0 && totalEstimatedCost > totalBudget) {
     const overAmount = Math.round(totalEstimatedCost - totalBudget);
     issues.push({
       id: 'budget-overrun-total',
       severity: 'warning',
       type: 'budget_overrun',
-      message: `Estimated itinerary stop costs ($${Math.round(totalEstimatedCost)}) exceed the trip budget ($${totalBudget}) by $${overAmount}.`,
+      message: `Estimated itinerary stop costs (${sym}${Math.round(totalEstimatedCost).toLocaleString()}) exceed the trip budget (${sym}${totalBudget.toLocaleString()}) by ${sym}${overAmount.toLocaleString()}.`,
       suggestion:
         'Use the "Reduce Budget by 20%" Smart Re-plan action or adjust expensive stops.',
     });
@@ -393,6 +416,7 @@ export function validateTripSchedule(params: {
   return {
     isValid: !issues.some((i) => i.severity === 'error'),
     totalEstimatedCost: Math.round(totalEstimatedCost * 100) / 100,
+    totalTripEstimatedCost,
     totalStops,
     verifiedStopsCount,
     issues,

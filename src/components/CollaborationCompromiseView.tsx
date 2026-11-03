@@ -11,6 +11,7 @@ import {
   Users,
 } from 'lucide-react';
 import { Trip, User } from '../types.ts';
+import { formatCurrency, getCurrencySymbol } from '../utils/currency.ts';
 
 interface CollaborationCompromiseViewProps {
   trip: Trip;
@@ -253,12 +254,12 @@ export const CollaborationCompromiseView: React.FC<
                 Join a Shared Trip via Invite Code
               </h3>
               <p className="text-xs text-slate-600 mt-1">
-                Switch to another shared trip or join as a Travel Buddy using an invite code (e.g., <code className="font-mono text-slate-900">IST-2026-89B</code> or <code className="font-mono text-slate-900">TYO-2026-44K</code>).
+                Switch to another shared trip or join as a Travel Buddy using an invite code (e.g., <code className="font-mono text-slate-900">IST-2026-89B</code> or <code className="font-mono text-slate-900">MAD-2026-77M</code>).
               </p>
               <form onSubmit={handleJoinSubmit} className="mt-4 space-y-3">
                 <input
                   type="text"
-                  placeholder="Enter Invite Code (e.g., TYO-2026-44K)"
+                  placeholder="Enter Invite Code (e.g., MAD-2026-77M)"
                   value={joinCodeInput}
                   onChange={(e) => setJoinCodeInput(e.target.value)}
                   className="w-full px-3 py-2 text-xs font-mono uppercase bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-teal-700"
@@ -354,12 +355,12 @@ export const CollaborationCompromiseView: React.FC<
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Daily Budget Comfort ($)
+                  Daily Budget Comfort ({getCurrencySymbol(trip.currency)})
                 </label>
                 <input
                   type="number"
                   min={25}
-                  max={1000}
+                  max={2500}
                   value={dailyBudget}
                   onChange={(e) => setDailyBudget(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg tabular-nums"
@@ -422,7 +423,7 @@ export const CollaborationCompromiseView: React.FC<
                         {sub.userName} ({sub.role})
                       </span>
                       <span>
-                        Pace: {sub.preferredPace} · Comfort: ${sub.dailyBudgetComfort}/day · {sub.mustHaveInterests.join(', ')}
+                        Pace: {sub.preferredPace} · Comfort: {formatCurrency(sub.dailyBudgetComfort, trip.currency)}/day · {sub.mustHaveInterests.join(', ')}
                       </span>
                     </div>
                     <p className="text-xs text-slate-700 mt-1.5">

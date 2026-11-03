@@ -7,13 +7,16 @@ import {
   generatePackingListAI,
   generateTravelDiaryAI,
   generateTripItineraryAI,
+  getAiConnectionStatus,
   negotiateGroupCompromiseAI,
 } from './src/server/ai.ts';
 import { db } from './src/server/db.ts';
 import { PROMPT_VERSIONS } from './src/server/prompts.ts';
 import {
+  applyPersonalityProfileToDays,
   buildDefaultPackingList,
   buildDefaultWeatherForecast,
+  buildRecommendedAccommodationAndTransit,
 } from './src/server/templates.ts';
 import {
   autoFixScheduleTimings,
@@ -103,6 +106,7 @@ export async function createAppServer() {
       trips: db.getTrips(),
       verifiedPlaces: db.getVerifiedPlaces(),
       aiLogs: db.getAiLogs(),
+      aiStatus: getAiConnectionStatus(),
     });
   });
 
@@ -179,11 +183,14 @@ export async function createAppServer() {
         if (dayMatch) {
           daysCount = Math.min(7, Math.max(1, parseInt(dayMatch[1], 10)));
         }
-        if (!parsedDest) {
-          const cityMatch = String(freeTextPrompt).match(
-            /\b(Istanbul|Paris|Tokyo|Rome|Barcelona|Kyoto|London|Lisbon|Shiraz|Vienna)\b/i
-          );
-          parsedDest = cityMatch ? cityMatch[1] : 'Istanbul';
+        // If user typed a city in freeTextPrompt (e.g. "4 days in Madrid, ..."), extract it
+        const inCityMatch = String(freeTextPrompt).match(
+          /\b(?:in|to|for|visit|visiting)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/
+        );
+        if (!parsedDest && inCityMatch) {
+          parsedDest = inCityMatch[1].trim();
+        } else if (!parsedDest) {
+          parsedDest = String(freeTextPrompt).split(',')[0].trim();
         }
       }
 
@@ -228,8 +235,11 @@ export async function createAppServer() {
       const validation = validateTripSchedule({
         days: generated.days,
         totalBudget: Number(totalBudget || 850),
+        currency: String(currency || 'USD'),
         personality: (personality as TravelPersonality) || 'Foodie',
         verifiedPlaces,
+        accommodationCost: generated.accommodation.totalStayCost,
+        transportCost: generated.dailyTransport.totalTransportCost,
       });
 
       const inviteCode = `${generated.destination
@@ -250,6 +260,8 @@ export async function createAppServer() {
         currency: String(currency || 'USD'),
         interests: Array.isArray(interests) ? interests : ['Food & Dining'],
         personality: (personality as TravelPersonality) || 'Foodie',
+        accommodation: generated.accommodation,
+        dailyTransport: generated.dailyTransport,
         inviteCode,
         ownerId: user.id,
         collaboratorIds: ['user-buddy-1'],
@@ -283,7 +295,7 @@ export async function createAppServer() {
             id: `chat-${Date.now()}`,
             sender: 'assistant',
             authorName: 'AI Trip Planner',
-            text: `Generated a ${generated.days.length}-day ${personality} itinerary for ${generated.destination} grounded with real coordinates and opening hours. Ask me anytime to swap stops, adjust for rain, or lighten the schedule.`,
+            text: `Generated a ${generated.days.length}-day ${personality} itinerary for ${generated.destination} grounded with real coordinates, recommended ${generated.accommodation.style.toLowerCase()} (${generated.accommodation.name}), and daily transit plan. Ask me anytime to swap stops, adjust for rain, or lighten the schedule.`,
             timestamp: new Date().toISOString(),
             promptVersion: PROMPT_VERSIONS.itinerary_generation,
           },
@@ -299,17 +311,19 @@ export async function createAppServer() {
         trip: newTrip,
         usedFallback: generated.usedFallback,
         aiLogs: db.getAiLogs(),
+        aiStatus: getAiConnectionStatus(),
       });
     } catch (err: any) {
       const code = err?.statusCode || 500;
       return res.status(code).json({
         error: err?.message || 'Failed to generate trip itinerary.',
         aiLogs: db.getAiLogs(),
+        aiStatus: getAiConnectionStatus(),
       });
     }
   });
 
-  // 4. UC3: Edit Itinerary (Add, Move, Remove, Reorder, Mystery Mode, Auto-Fix Timings)
+  // 4. UC3: Edit Itinerary (Add, Move, Remove, Reorder, Mystery Mode, Auto-Fix Timings, Personality Switch)
   app.put('/api/trips/:id/days', (req, res) => {
     const trip = db.getTripById(req.params.id);
     if (!trip) {
@@ -321,13 +335,38 @@ export async function createAppServer() {
       return res.status(400).json({ error: 'Valid days array is required.' });
     }
 
+    let candidateDays = days;
+    const personalityChanged =
+      personality && personality !== trip.personality;
+
     if (personality) {
       trip.personality = personality;
     }
 
+    if (personalityChanged) {
+      const { accommodation, dailyTransport } =
+        buildRecommendedAccommodationAndTransit({
+          destination: trip.destination,
+          centerLat: trip.centerLat,
+          centerLng: trip.centerLng,
+          daysCount: Math.max(1, days.length),
+          personality: trip.personality,
+          totalBudget: trip.totalBudget,
+        });
+      trip.accommodation = accommodation;
+      trip.dailyTransport = dailyTransport;
+      candidateDays = applyPersonalityProfileToDays(candidateDays, {
+        destination: trip.destination,
+        personality: trip.personality,
+        totalBudget: trip.totalBudget,
+        accommodationCost: accommodation.totalStayCost,
+        transportCost: dailyTransport.totalTransportCost,
+      });
+    }
+
     const verifiedPlaces = db.getVerifiedPlaces();
     let processedDays = groundAndEnrichDays(
-      days,
+      candidateDays,
       verifiedPlaces,
       trip.centerLat,
       trip.centerLng
@@ -347,8 +386,11 @@ export async function createAppServer() {
     trip.validation = validateTripSchedule({
       days: trip.days,
       totalBudget: trip.totalBudget,
+      currency: trip.currency,
       personality: trip.personality,
       verifiedPlaces,
+      accommodationCost: trip.accommodation?.totalStayCost ?? 0,
+      transportCost: trip.dailyTransport?.totalTransportCost ?? 0,
     });
 
     db.saveTrip(trip);
@@ -391,8 +433,11 @@ export async function createAppServer() {
       trip.validation = validateTripSchedule({
         days: trip.days,
         totalBudget: trip.totalBudget,
+        currency: trip.currency,
         personality: trip.personality,
         verifiedPlaces,
+        accommodationCost: trip.accommodation?.totalStayCost ?? 0,
+        transportCost: trip.dailyTransport?.totalTransportCost ?? 0,
       });
 
       const assistantMsg = {
@@ -473,8 +518,11 @@ export async function createAppServer() {
     trip.validation = validateTripSchedule({
       days: trip.days,
       totalBudget: trip.totalBudget,
+      currency: trip.currency,
       personality: trip.personality,
       verifiedPlaces: db.getVerifiedPlaces(),
+      accommodationCost: trip.accommodation?.totalStayCost ?? 0,
+      transportCost: trip.dailyTransport?.totalTransportCost ?? 0,
     });
     db.saveTrip(trip);
     return res.json({ trip });

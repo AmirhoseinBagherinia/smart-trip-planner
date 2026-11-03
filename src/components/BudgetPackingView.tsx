@@ -17,6 +17,7 @@ import {
   Trip,
   User,
 } from '../types.ts';
+import { formatCurrency, getCurrencySymbol } from '../utils/currency.ts';
 
 interface BudgetPackingViewProps {
   trip: Trip;
@@ -62,6 +63,8 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
   onUpdatePackingList,
   isGeneratingPacking,
 }) => {
+  const currencySymbol = getCurrencySymbol(trip.currency);
+
   // Expense form state
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('Food & Dining');
@@ -80,18 +83,24 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
   const [newItemCat, setNewItemCat] = useState<PackingCategory>('Clothing');
   const [newItemQty, setNewItemQty] = useState('1');
 
-  // Calculate Estimated Stop Costs by Category
+  // Calculate Estimated Stop Costs by Category + Accommodation + Daily Transit
   const allStops = trip.days.flatMap((d) => d.stops);
   const totalEstimatedStopsCost = allStops.reduce(
     (sum, s) => sum + Number(s.estimatedCost || 0),
     0
   );
+  const accommodationEstimate =
+    trip.accommodation?.totalStayCost ?? Math.round(trip.totalBudget * 0.35);
+  const transportEstimate =
+    trip.dailyTransport?.totalTransportCost ?? Math.round(trip.days.length * 15);
+  const totalFullTripEstimate =
+    accommodationEstimate + transportEstimate + totalEstimatedStopsCost;
 
-  // Map StopCategory to ExpenseCategory for comparison
+  // Map StopCategory to ExpenseCategory for cohesive comparison
   const estimatedByCategory: Record<ExpenseCategory, number> = {
-    Accommodation: Math.round(trip.totalBudget * 0.35), // Baseline accommodation allocation
+    Accommodation: accommodationEstimate,
     'Food & Dining': 0,
-    Transport: Math.round(trip.days.length * 12),
+    Transport: transportEstimate,
     'Activities & Tickets': 0,
     'Shopping & Misc': 0,
   };
@@ -205,10 +214,10 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
           <div>
             <h2 className="text-xl font-bold text-slate-900">
-              Trip Budget & Expense Ledger
+              Trip Budget & Expense Ledger ({trip.currency})
             </h2>
             <p className="text-sm text-slate-600 mt-1">
-              Compare estimated itinerary stop costs against actual logged spending across categories.
+              Cohesive {trip.personality} budget profile including recommended accommodation, daily local transit, and scheduled itinerary stops.
             </p>
           </div>
 
@@ -243,7 +252,7 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
                 }}
                 className="px-3.5 py-2 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
               >
-                Adjust Budget Cap ({trip.currency} {trip.totalBudget})
+                Adjust Budget Cap ({formatCurrency(trip.totalBudget, trip.currency)})
               </button>
             )}
           </div>
@@ -253,25 +262,25 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 py-6 border-b border-slate-200">
           <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80">
             <div className="text-xs text-slate-500 font-medium">
-              Total Trip Budget
+              Total Trip Budget ({trip.currency})
             </div>
             <div className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-              ${trip.totalBudget.toLocaleString()}
+              {formatCurrency(trip.totalBudget, trip.currency)}
             </div>
             <div className="text-xs text-slate-500 mt-1 tabular-nums">
-              ${Math.round(trip.totalBudget / Math.max(1, trip.travelersCount))} per traveler · {trip.travelersCount} travelers
+              {formatCurrency(Math.round(trip.totalBudget / Math.max(1, trip.travelersCount)), trip.currency)} per traveler · {trip.travelersCount} travelers
             </div>
           </div>
 
           <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80">
             <div className="text-xs text-slate-500 font-medium">
-              Itinerary Stops Estimate
+              Full Trip Estimate (Stay + Transit + Stops)
             </div>
             <div className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-              ${totalEstimatedStopsCost.toLocaleString()}
+              {formatCurrency(totalFullTripEstimate, trip.currency)}
             </div>
             <div className="text-xs text-slate-500 mt-1 tabular-nums">
-              Across {allStops.length} scheduled stops ({trip.days.length} days)
+              Stops: {formatCurrency(totalEstimatedStopsCost, trip.currency)} · Stay: {formatCurrency(accommodationEstimate, trip.currency)} · Transit: {formatCurrency(transportEstimate, trip.currency)}
             </div>
           </div>
 
@@ -280,7 +289,7 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
               Actual Logged Spending
             </div>
             <div className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-              ${totalActualSpent.toLocaleString()}
+              {formatCurrency(totalActualSpent, trip.currency)}
             </div>
             <div className="text-xs text-slate-500 mt-1 tabular-nums">
               {spentPercentage}% of total budget utilized
@@ -296,23 +305,63 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
                 remainingBudget < 0 ? 'text-red-600' : 'text-teal-700'
               }`}
             >
-              {remainingBudget < 0
-                ? `-$${Math.abs(remainingBudget).toLocaleString()}`
-                : `$${remainingBudget.toLocaleString()}`}
+              {formatCurrency(remainingBudget, trip.currency)}
             </div>
             <div className="text-xs text-slate-500 mt-1 tabular-nums">
               {remainingBudget < 0
                 ? 'Over budget threshold'
-                : `$${Math.round(remainingBudget / Math.max(1, trip.days.length))}/day remaining`}
+                : `${formatCurrency(Math.round(remainingBudget / Math.max(1, trip.days.length)), trip.currency)}/day remaining`}
             </div>
           </div>
         </div>
+
+        {/* Recommended Base Accommodation & Daily Transit Plan */}
+        {(trip.accommodation || trip.dailyTransport) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-5 border-b border-slate-200">
+            {trip.accommodation && (
+              <div className="p-4 rounded-lg bg-slate-50/70 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-teal-800">
+                    Recommended Base Accommodation · {trip.accommodation.style}
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 tabular-nums">
+                    {formatCurrency(trip.accommodation.nightlyRate, trip.currency)}/night · Total {formatCurrency(trip.accommodation.totalStayCost, trip.currency)} ({trip.accommodation.nights} nights)
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-slate-900">
+                  {trip.accommodation.name} — {trip.accommodation.neighborhood}
+                </div>
+                <p className="text-xs text-slate-600">
+                  {trip.accommodation.bookingNote}
+                </p>
+              </div>
+            )}
+            {trip.dailyTransport && (
+              <div className="p-4 rounded-lg bg-slate-50/70 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-teal-800">
+                    Daily Local Transit Plan ({trip.personality})
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 tabular-nums">
+                    {formatCurrency(trip.dailyTransport.dailyCostPerDay, trip.currency)}/day · Total {formatCurrency(trip.dailyTransport.totalTransportCost, trip.currency)}
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-slate-900">
+                  {trip.dailyTransport.modeSummary}
+                </div>
+                <p className="text-xs text-slate-600">
+                  {trip.dailyTransport.notes}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {remainingBudget < 0 && (
           <div className="mt-4 p-3.5 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3 text-xs text-red-800">
             <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
             <span>
-              <strong>Budget Alert:</strong> Logged expenses exceed your ${trip.totalBudget} target by ${Math.abs(remainingBudget)}. Consider increasing the budget cap or using the AI Planner’s "Reduce Budget by 20%" action.
+              <strong>Budget Alert:</strong> Logged expenses exceed your {formatCurrency(trip.totalBudget, trip.currency)} target by {formatCurrency(Math.abs(remainingBudget), trip.currency)}. Consider increasing the budget cap or using the AI Planner’s "Reduce Budget by 20%" action.
             </span>
           </div>
         )}
@@ -322,7 +371,7 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
           {/* Category Breakdown Bars */}
           <div className="lg:col-span-6 space-y-4">
             <h3 className="text-sm font-semibold text-slate-900">
-              Estimated vs. Actual by Category
+              Estimated vs. Actual by Category ({trip.currency})
             </h3>
             <div className="space-y-4">
               {EXPENSE_CATEGORIES.map((cat) => {
@@ -337,18 +386,21 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-medium text-slate-800">{cat}</span>
                       <span className="text-slate-600 tabular-nums">
-                        Est: ${est} · Actual: <strong className="text-slate-900">${act}</strong>
+                        Est: {formatCurrency(est, trip.currency)} · Actual:{' '}
+                        <strong className="text-slate-900">
+                          {formatCurrency(act, trip.currency)}
+                        </strong>
                       </span>
                     </div>
                     <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex flex-col gap-0.5">
                       <div
                         className="h-full bg-teal-700 rounded-full transition-all"
                         style={{ width: `${actPct}%` }}
-                        title={`Actual: $${act}`}
+                        title={`Actual: ${formatCurrency(act, trip.currency)}`}
                       />
                     </div>
                     <div className="text-[11px] text-slate-400 tabular-nums">
-                      Planned allocation reference: {estPct}% (${est})
+                      Planned allocation reference: {estPct}% ({formatCurrency(est, trip.currency)})
                     </div>
                   </div>
                 );
@@ -364,7 +416,7 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
             >
               <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
                 <DollarSign className="w-4 h-4 text-teal-700" />
-                Log Real Expense
+                Log Real Expense ({trip.currency})
               </h3>
               {expenseError && (
                 <p className="text-xs text-red-600 font-medium">{expenseError}</p>
@@ -394,7 +446,7 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
                   type="number"
                   step="0.01"
                   min="1"
-                  placeholder="Amount ($)"
+                  placeholder={`Amount (${currencySymbol})`}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   className="px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg tabular-nums focus:outline-none focus:border-teal-700"
@@ -449,7 +501,7 @@ export const BudgetPackingView: React.FC<BudgetPackingViewProps> = ({
                           {exp.category} · {exp.paidBy} · {exp.date}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900 tabular-nums">
-                          ${exp.amount.toFixed(2)}
+                          {formatCurrency(exp.amount, trip.currency, { showDecimals: true })}
                         </td>
                         <td className="py-2.5 px-2 text-right">
                           <button

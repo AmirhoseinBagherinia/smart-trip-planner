@@ -178,9 +178,29 @@ export interface ValidationIssue {
   suggestion: string;
 }
 
+export interface RecommendedAccommodation {
+  name: string;
+  neighborhood: string;
+  style: string;
+  nightlyRate: number;
+  nights: number;
+  totalStayCost: number;
+  bookingNote: string;
+  lat: number;
+  lng: number;
+}
+
+export interface DailyTransportPlan {
+  modeSummary: string;
+  dailyCostPerDay: number;
+  totalTransportCost: number;
+  notes: string;
+}
+
 export interface ScheduleValidationResult {
   isValid: boolean;
   totalEstimatedCost: number;
+  totalTripEstimatedCost?: number;
   totalStops: number;
   verifiedStopsCount: number;
   issues: ValidationIssue[];
@@ -211,6 +231,8 @@ export interface Trip {
   currency: string;
   interests: string[];
   personality: TravelPersonality;
+  accommodation?: RecommendedAccommodation;
+  dailyTransport?: DailyTransportPlan;
   inviteCode: string;
   ownerId: string;
   collaboratorIds: string[];

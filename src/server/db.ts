@@ -7,6 +7,7 @@ import {
   VerifiedPlace,
 } from '../types.ts';
 import {
+  buildRecommendedAccommodationAndTransit,
   createSeedTrips,
   SEED_AI_LOGS,
   SEED_USERS,
@@ -45,13 +46,54 @@ class PersistentDatabase {
           Array.isArray(parsed.trips) &&
           parsed.trips.length > 0
         ) {
+          // Merge any newly added SEED_VERIFIED_PLACES (like Madrid and Shiraz)
+          const existingPlaceIds = new Set(
+            (parsed.verifiedPlaces || []).map((p) => p.id)
+          );
+          const mergedPlaces = [
+            ...(parsed.verifiedPlaces || []),
+            ...SEED_VERIFIED_PLACES.filter((p) => !existingPlaceIds.has(p.id)),
+          ];
+
+          // Repair any previously saved non-Paris trip that accidentally received Paris fallback stops
+          const cleanedTrips = parsed.trips
+            .filter((t) => {
+              const isParisTrip = t.destination.toLowerCase().includes('paris');
+              const hasParisStop = t.days?.some((d) =>
+                d.stops?.some(
+                  (s) =>
+                    s.name.includes('Sainte-Chapelle') ||
+                    s.name.includes('Musee d Orsay')
+                )
+              );
+              return isParisTrip || !hasParisStop;
+            })
+            .map((t) => {
+              if (!t.accommodation || !t.dailyTransport) {
+                const { accommodation, dailyTransport } =
+                  buildRecommendedAccommodationAndTransit({
+                    destination: t.destination || 'Madrid',
+                    centerLat: t.centerLat,
+                    centerLng: t.centerLng,
+                    daysCount: Math.max(1, t.days?.length || 3),
+                    personality: t.personality || 'Foodie',
+                    totalBudget: t.totalBudget || 1250,
+                  });
+                return {
+                  ...t,
+                  accommodation: t.accommodation || accommodation,
+                  dailyTransport: t.dailyTransport || dailyTransport,
+                };
+              }
+              return t;
+            });
+
           return {
             users: parsed.users,
-            trips: parsed.trips,
-            verifiedPlaces:
-              parsed.verifiedPlaces || [...SEED_VERIFIED_PLACES],
+            trips: cleanedTrips.length > 0 ? cleanedTrips : createSeedTrips(),
+            verifiedPlaces: mergedPlaces,
             aiLogs: parsed.aiLogs || [...SEED_AI_LOGS],
-            aiCache: parsed.aiCache || {},
+            aiCache: {},
           };
         }
       }

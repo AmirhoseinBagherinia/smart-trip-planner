@@ -21,6 +21,13 @@ interface AdminDashboardViewProps {
   users: User[];
   aiLogs: AiUsageLog[];
   verifiedPlaces: VerifiedPlace[];
+  aiStatus?: {
+    apiKeyConfigured: boolean;
+    activeModel: string;
+    mode: 'live_connected' | 'fallback_active' | 'ready';
+    lastError: string | null;
+    lastCheckedAt: string;
+  } | null;
   onToggleBlockUser: (userId: string, isBlocked: boolean) => Promise<void>;
   onAddVerifiedPlace: (place: {
     city: string;
@@ -50,6 +57,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   users,
   aiLogs,
   verifiedPlaces,
+  aiStatus,
   onToggleBlockUser,
   onAddVerifiedPlace,
   onDeleteVerifiedPlace,
@@ -58,12 +66,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [placeSearch, setPlaceSearch] = useState('');
 
   // New Verified Place form
-  const [city, setCity] = useState('Istanbul');
-  const [country, setCountry] = useState('Turkey');
+  const [city, setCity] = useState('Madrid');
+  const [country, setCountry] = useState('Spain');
   const [name, setName] = useState('');
   const [category, setCategory] = useState<StopCategory>('History & Culture');
-  const [lat, setLat] = useState('41.0112');
-  const [lng, setLng] = useState('28.9785');
+  const [lat, setLat] = useState('40.4138');
+  const [lng, setLng] = useState('-3.6921');
   const [openingHours, setOpeningHours] = useState('09:00-18:30');
   const [typicalCostUsd, setTypicalCostUsd] = useState('20');
   const [isIndoor, setIsIndoor] = useState(true);
@@ -148,6 +156,44 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
           <div className="text-xs text-slate-500 tabular-nums">
             Signed in as {currentUser.name} ({currentUser.role.toUpperCase()})
+          </div>
+        </div>
+
+        {/* GEMINI API CONNECTION STATUS INDICATOR */}
+        <div
+          className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+            aiStatus?.apiKeyConfigured && aiStatus?.mode !== 'fallback_active'
+              ? 'bg-teal-50/70 border-teal-200 text-teal-950'
+              : 'bg-amber-50 border-amber-200 text-amber-950'
+          }`}
+        >
+          <div className="space-y-1">
+            <div className="text-xs font-bold flex items-center gap-2">
+              <span
+                className={`w-2.5 h-2.5 rounded-full inline-block ${
+                  aiStatus?.apiKeyConfigured && aiStatus?.mode !== 'fallback_active'
+                    ? 'bg-teal-600'
+                    : 'bg-amber-600'
+                }`}
+              />
+              <span>
+                Gemini API Connection Status:{' '}
+                {aiStatus?.mode === 'live_connected'
+                  ? `Connected (Live Model: ${aiStatus.activeModel})`
+                  : aiStatus?.apiKeyConfigured
+                  ? `Ready / Grounded Fallback Standby (Model: ${aiStatus.activeModel})`
+                  : 'Using Grounded Multi-City Blueprint Fallback (GEMINI_API_KEY Not Configured)'}
+              </span>
+            </div>
+            <div className="text-xs opacity-85 tabular-nums">
+              Environment Key Present: {aiStatus?.apiKeyConfigured ? 'Yes' : 'No'} · Active Model: <span className="font-mono">{aiStatus?.activeModel || 'gemini-3-flash-preview'}</span>
+              {aiStatus?.lastError
+                ? ` · Last API Diagnostic: ${aiStatus.lastError}`
+                : ' · Zero API errors recorded'}
+            </div>
+          </div>
+          <div className="text-[11px] font-mono opacity-75 tabular-nums whitespace-nowrap shrink-0">
+            Checked: {aiStatus?.lastCheckedAt ? new Date(aiStatus.lastCheckedAt).toLocaleTimeString() : 'Live'}
           </div>
         </div>
 

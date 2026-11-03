@@ -43,6 +43,7 @@ import {
   UserRole,
   VerifiedPlace,
 } from './types.ts';
+import { formatCurrency, getCurrencySymbol } from './utils/currency.ts';
 
 type ActiveSection =
   | 'workspace'
@@ -83,6 +84,13 @@ export default function App() {
   const [activeTripId, setActiveTripId] = useState<string>('');
   const [verifiedPlaces, setVerifiedPlaces] = useState<VerifiedPlace[]>([]);
   const [aiLogs, setAiLogs] = useState<AiUsageLog[]>([]);
+  const [aiStatus, setAiStatus] = useState<{
+    apiKeyConfigured: boolean;
+    activeModel: string;
+    mode: 'live_connected' | 'fallback_active' | 'ready';
+    lastError: string | null;
+    lastCheckedAt: string;
+  } | null>(null);
   const [activeSection, setActiveSection] =
     useState<ActiveSection>('workspace');
   const [selectedDayNum, setSelectedDayNum] = useState<number>(1);
@@ -171,6 +179,9 @@ export default function App() {
         }
         setVerifiedPlaces(data.verifiedPlaces || []);
         setAiLogs(data.aiLogs || []);
+        if (data.aiStatus) {
+          setAiStatus(data.aiStatus);
+        }
 
         // Save to LocalStorage for Offline Mode
         localStorage.setItem(
@@ -274,6 +285,9 @@ export default function App() {
     if (data.aiLogs) {
       setAiLogs(data.aiLogs);
     }
+    if (data.aiStatus) {
+      setAiStatus(data.aiStatus);
+    }
     if (!res.ok) {
       throw new Error(data.error || `Request failed with status ${res.status}`);
     }
@@ -302,6 +316,7 @@ export default function App() {
       updateTripInState(data.trip);
       setActiveTripId(data.trip.id);
       setSelectedDayNum(1);
+      setSelectedStopId(null);
       setShowCreateTripModal(false);
       setActiveSection('workspace');
       setStatusBanner({
@@ -326,10 +341,16 @@ export default function App() {
     setIsGeneratingTrip(true);
     setStatusBanner(null);
     try {
-      const cityMatch = quickPromptText.match(
-        /\b(Istanbul|Paris|Tokyo|Rome|Barcelona|Kyoto|London|Lisbon)\b/i
-      );
-      const targetCity = cityMatch ? cityMatch[1] : activeTrip.destination;
+      const cityMatch =
+        quickPromptText.match(
+          /\b(?:in|to|for|visit|visiting)\s+([A-Z][a-zA-Z\s-]{2,24}?)(?:,|\.|;|\s+(?:for|with|on|in|relaxed|food|history|art|nature|budget|luxury|slow|adventure|medium|low|high|and)\b|$)/i
+        ) ||
+        quickPromptText.match(
+          /\b(Madrid|Shiraz|Istanbul|Paris|Tokyo|Rome|Barcelona|Kyoto|London|Lisbon|Vienna|Prague|Seoul|Amsterdam|Cairo|Athens|Marrakech|Florence|Venice|Berlin)\b/i
+        );
+      const targetCity = cityMatch
+        ? cityMatch[1].trim()
+        : activeTrip.destination;
       const data = await apiFetch('/api/trips', {
         method: 'POST',
         body: JSON.stringify({
@@ -347,6 +368,7 @@ export default function App() {
       updateTripInState(data.trip);
       setActiveTripId(data.trip.id);
       setSelectedDayNum(1);
+      setSelectedStopId(null);
       setQuickPromptText('');
       setStatusBanner({
         type: 'info',
@@ -698,7 +720,7 @@ export default function App() {
               >
                 {trips.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.title} ({t.destination} · {t.days.length}d · ${t.totalBudget})
+                    {t.title} ({t.destination} · {t.days.length}d · {formatCurrency(t.totalBudget, t.currency)})
                   </option>
                 ))}
               </select>
@@ -880,50 +902,113 @@ export default function App() {
             </form>
 
             {/* Trip Summary Header & Personality Mode Switcher */}
-            <div className="p-5 rounded-xl bg-white border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div>
-                <div className="text-xs text-slate-500 tabular-nums">
-                  {activeTrip.destination}, {activeTrip.country} · {activeTrip.startDate} to {activeTrip.endDate} · {activeTrip.travelersCount} Travelers · Invite Code: <span className="font-mono font-semibold text-slate-800">{activeTrip.inviteCode}</span>
+            <div className="p-5 rounded-xl bg-white border border-slate-200 space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs text-slate-500 tabular-nums">
+                    {activeTrip.destination}, {activeTrip.country} · {activeTrip.startDate} to {activeTrip.endDate} · {activeTrip.travelersCount} Travelers · Invite Code: <span className="font-mono font-semibold text-slate-800">{activeTrip.inviteCode}</span>
+                  </div>
+                  <h1 className="text-2xl font-bold text-slate-900 mt-1">
+                    {activeTrip.title}
+                  </h1>
+                  <div className="text-xs text-slate-600 mt-1 tabular-nums">
+                    Full Trip Estimate:{' '}
+                    <strong>
+                      {formatCurrency(
+                        activeTrip.validation.totalTripEstimatedCost ||
+                          activeTrip.validation.totalEstimatedCost +
+                            (activeTrip.accommodation?.totalStayCost ?? 0) +
+                            (activeTrip.dailyTransport?.totalTransportCost ?? 0),
+                        activeTrip.currency
+                      )}
+                    </strong>{' '}
+                    (Stops: {formatCurrency(activeTrip.validation.totalEstimatedCost, activeTrip.currency)}
+                    {activeTrip.accommodation
+                      ? ` · Stay: ${formatCurrency(activeTrip.accommodation.totalStayCost, activeTrip.currency)}`
+                      : ''}
+                    {activeTrip.dailyTransport
+                      ? ` · Transit: ${formatCurrency(activeTrip.dailyTransport.totalTransportCost, activeTrip.currency)}`
+                      : ''}
+                    ) of{' '}
+                    <strong>{formatCurrency(activeTrip.totalBudget, activeTrip.currency)}</strong>{' '}
+                    {activeTrip.currency} budget · {activeTrip.validation.verifiedStopsCount} of {activeTrip.validation.totalStops} stops grounded in Verified Catalog
+                  </div>
                 </div>
-                <h1 className="text-2xl font-bold text-slate-900 mt-1">
-                  {activeTrip.title}
-                </h1>
-                <div className="text-xs text-slate-600 mt-1 tabular-nums">
-                  Estimated Stops Cost: <strong>${activeTrip.validation.totalEstimatedCost}</strong> of ${activeTrip.totalBudget} {activeTrip.currency} budget · {activeTrip.validation.verifiedStopsCount} of {activeTrip.validation.totalStops} stops grounded in Verified Catalog
+
+                {/* Travel Personality Mode Selector (Creative Feature 1) */}
+                <div className="flex flex-col sm:items-end gap-1.5">
+                  <span className="text-[11px] font-medium text-slate-500">
+                    Travel Personality Mode (Shapes Hotel, Transit, Pacing & Pricing):
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
+                    {(
+                      [
+                        'Foodie',
+                        'Adventurer',
+                        'Slow Traveler',
+                        'Luxury',
+                        'Backpacker',
+                      ] as TravelPersonality[]
+                    ).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() =>
+                          saveUpdatedDays(activeTrip.days, { personality: mode })
+                        }
+                        className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                          activeTrip.personality === mode
+                            ? 'bg-white text-slate-900 shadow-sm font-semibold'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Travel Personality Mode Selector (Creative Feature 1) */}
-              <div className="flex flex-col sm:items-end gap-1.5">
-                <span className="text-[11px] font-medium text-slate-500">
-                  Travel Personality Mode (Shapes Pacing & Stop Selection):
-                </span>
-                <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
-                  {(
-                    [
-                      'Foodie',
-                      'Adventurer',
-                      'Slow Traveler',
-                      'Luxury',
-                      'Backpacker',
-                    ] as TravelPersonality[]
-                  ).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() =>
-                        saveUpdatedDays(activeTrip.days, { personality: mode })
-                      }
-                      className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
-                        activeTrip.personality === mode
-                          ? 'bg-white text-slate-900 shadow-sm font-semibold'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {mode}
-                    </button>
-                  ))}
+              {/* Recommended Base Accommodation & Daily Transit Strip */}
+              {(activeTrip.accommodation || activeTrip.dailyTransport) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
+                  {activeTrip.accommodation && (
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-teal-800">
+                          Recommended Base Stay · {activeTrip.accommodation.style}
+                        </span>
+                        <span className="font-mono font-bold text-slate-900 tabular-nums">
+                          {formatCurrency(activeTrip.accommodation.nightlyRate, activeTrip.currency)}/night · {formatCurrency(activeTrip.accommodation.totalStayCost, activeTrip.currency)} ({activeTrip.accommodation.nights}n)
+                        </span>
+                      </div>
+                      <div className="font-bold text-slate-900">
+                        {activeTrip.accommodation.name} — {activeTrip.accommodation.neighborhood}
+                      </div>
+                      <div className="text-slate-500">
+                        {activeTrip.accommodation.bookingNote}
+                      </div>
+                    </div>
+                  )}
+                  {activeTrip.dailyTransport && (
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80 flex flex-col justify-between gap-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-teal-800">
+                          Daily Local Transit ({activeTrip.personality})
+                        </span>
+                        <span className="font-mono font-bold text-slate-900 tabular-nums">
+                          {formatCurrency(activeTrip.dailyTransport.dailyCostPerDay, activeTrip.currency)}/day · {formatCurrency(activeTrip.dailyTransport.totalTransportCost, activeTrip.currency)} total
+                        </span>
+                      </div>
+                      <div className="font-bold text-slate-900">
+                        {activeTrip.dailyTransport.modeSummary}
+                      </div>
+                      <div className="text-slate-500">
+                        {activeTrip.dailyTransport.notes}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
 
             {/* SCHEDULE & QUALITY GUARD VALIDATION BANNER */}
@@ -963,7 +1048,15 @@ export default function App() {
                   </span>
                 </div>
                 <span className="text-[11px] text-teal-700 tabular-nums hidden sm:inline">
-                  Budget: ${activeTrip.validation.totalEstimatedCost} / ${activeTrip.totalBudget}
+                  Full Est:{' '}
+                  {formatCurrency(
+                    activeTrip.validation.totalTripEstimatedCost ||
+                      activeTrip.validation.totalEstimatedCost +
+                        (activeTrip.accommodation?.totalStayCost ?? 0) +
+                        (activeTrip.dailyTransport?.totalTransportCost ?? 0),
+                    activeTrip.currency
+                  )}{' '}
+                  / {formatCurrency(activeTrip.totalBudget, activeTrip.currency)}
                 </span>
               </div>
             )}
@@ -1151,7 +1244,7 @@ export default function App() {
                       />
                       <input
                         type="number"
-                        placeholder="Est Cost ($)"
+                        placeholder={`Est Cost (${getCurrencySymbol(activeTrip.currency)})`}
                         value={newStopCost}
                         onChange={(e) => setNewStopCost(e.target.value)}
                         className="px-3 py-1.5 text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg tabular-nums"
@@ -1222,7 +1315,7 @@ export default function App() {
                                 Stop {idx + 1} · {stop.startTime}–{stop.endTime} · Mystery Stop Locked
                               </div>
                               <span className="text-xs text-slate-400">
-                                {stop.category} · Est. ${stop.estimatedCost}
+                                {stop.category} · Est. {formatCurrency(stop.estimatedCost, activeTrip.currency)}
                               </span>
                             </div>
                             <p className="text-sm text-slate-200 italic">
@@ -1264,7 +1357,7 @@ export default function App() {
                                 <span aria-hidden="true">·</span>
                                 <span>{stop.category}</span>
                                 <span aria-hidden="true">·</span>
-                                <span>${stop.estimatedCost}</span>
+                                <span>{formatCurrency(stop.estimatedCost, activeTrip.currency)}</span>
                                 <span aria-hidden="true">·</span>
                                 <span>Open {stop.openingHours}</span>
                                 <span aria-hidden="true">·</span>
@@ -1410,7 +1503,7 @@ export default function App() {
                                 </div>
                                 <div>
                                   <label className="block text-[10px] text-slate-500">
-                                    Cost ($)
+                                    Cost ({getCurrencySymbol(activeTrip.currency)})
                                   </label>
                                   <input
                                     type="number"
@@ -1581,6 +1674,7 @@ export default function App() {
                   day={activeDay}
                   centerLat={activeTrip.centerLat}
                   centerLng={activeTrip.centerLng}
+                  currency={activeTrip.currency}
                   selectedStopId={selectedStopId}
                   onSelectStop={(id) => setSelectedStopId(id)}
                 />
@@ -1864,6 +1958,7 @@ export default function App() {
             users={users}
             aiLogs={aiLogs}
             verifiedPlaces={verifiedPlaces}
+            aiStatus={aiStatus}
             onToggleBlockUser={async (userId, isBlocked) => {
               const data = await apiFetch(`/api/admin/users/${userId}/block`, {
                 method: 'POST',

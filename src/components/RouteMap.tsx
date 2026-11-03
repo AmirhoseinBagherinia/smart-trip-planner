@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { TripDay, TripStop } from '../types.ts';
+import { formatCurrency } from '../utils/currency.ts';
 
 interface RouteMapProps {
   day: TripDay;
   centerLat: number;
   centerLng: number;
+  currency?: string;
   selectedStopId?: string | null;
   onSelectStop?: (stopId: string) => void;
 }
@@ -14,6 +16,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   day,
   centerLat,
   centerLng,
+  currency = 'USD',
   selectedStopId,
   onSelectStop,
 }) => {
@@ -109,7 +112,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       const popupHtml = `
         <div style="font-family: 'DM Sans', sans-serif; min-width: 190px; padding: 2px;">
           <div style="font-size: 11px; color: #64748b; margin-bottom: 2px;">
-            Stop ${index + 1} · ${stop.startTime}–${stop.endTime} · $${stop.estimatedCost}
+            Stop ${index + 1} · ${stop.startTime}–${stop.endTime} · ${formatCurrency(stop.estimatedCost, currency)}
           </div>
           <div style="font-weight: 700; font-size: 13px; color: #0f172a; margin-bottom: 4px;">
             ${stop.name}
@@ -145,6 +148,8 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       polyline.addTo(group);
     }
 
+    map.invalidateSize();
+
     if (selectedStopId) {
       const target = visibleStops.find((s) => s.id === selectedStopId);
       if (target && !Number.isNaN(target.lat) && !Number.isNaN(target.lng)) {
@@ -153,13 +158,17 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       }
     }
 
-    if (validCoords.length > 0) {
+    if (validCoords.length > 1) {
       const bounds = L.latLngBounds(validCoords);
-      map.fitBounds(bounds, { padding: [42, 42], maxZoom: 15 });
+      map.fitBounds(bounds, { padding: [45, 45], maxZoom: 15, animate: true });
+    } else if (validCoords.length === 1) {
+      map.setView(validCoords[0], 14, { animate: true });
     } else {
-      map.setView([centerLat || 41.0082, centerLng || 28.9784], 13);
+      map.setView([centerLat || 41.0082, centerLng || 28.9784], 13, {
+        animate: true,
+      });
     }
-  }, [day, centerLat, centerLng, selectedStopId]);
+  }, [day, day.dayNumber, centerLat, centerLng, selectedStopId]);
 
   const totalDistanceKm = day.stops
     .reduce((acc, s) => acc + (s.distanceFromPrevKm || 0), 0)
@@ -180,8 +189,8 @@ export const RouteMap: React.FC<RouteMapProps> = ({
             {day.stops.length} stops · {totalDistanceKm} km total route · ~{totalTransitMin} min transit
           </p>
         </div>
-        <div className="text-xs text-slate-500 tabular-nums">
-          WGS84 Verified Coordinates
+        <div className="text-xs text-slate-500 font-mono tabular-nums">
+          {Number(centerLat || 0).toFixed(4)}, {Number(centerLng || 0).toFixed(4)}
         </div>
       </div>
 

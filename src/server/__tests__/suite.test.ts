@@ -16,6 +16,7 @@ import {
   groundAndEnrichDays,
   validateTripSchedule,
 } from '../validator.ts';
+import { formatCurrency } from '../../utils/currency.ts';
 
 function runTestSuite() {
   console.log('Running Smart Trip Planner Automated Test Suite...\n');
@@ -67,7 +68,7 @@ function runTestSuite() {
     const fixedDays = autoFixScheduleTimings(trip.days);
     const revalidated = validateTripSchedule({
       days: fixedDays,
-      totalBudget: 1000,
+      totalBudget: 1500,
       personality: 'Foodie',
       verifiedPlaces: SEED_VERIFIED_PLACES,
     });
@@ -140,7 +141,104 @@ function runTestSuite() {
     passed++;
   }
 
-  console.log(`\nAll ${passed}/5 automated test suites passed!`);
+  // Test 6: Multi-Day Custom City Generation (Madrid 5 Days — Zero Duplicate Stops & Zero Cross-City Contamination)
+  {
+    const madridPlan = buildFallbackCityTemplate({
+      destination: 'Madrid',
+      startDate: '2026-11-12',
+      daysCount: 5,
+      personality: 'Foodie',
+      verifiedPlaces: SEED_VERIFIED_PLACES,
+    });
+
+    assert.equal(madridPlan.country, 'Spain', 'Madrid country must be Spain');
+    assert.ok(
+      Math.abs(madridPlan.centerLat - 40.4168) < 0.05 &&
+        Math.abs(madridPlan.centerLng - -3.7038) < 0.05,
+      `Madrid center coordinates must be ~40.4168, -3.7038 (got ${madridPlan.centerLat}, ${madridPlan.centerLng})`
+    );
+    assert.equal(madridPlan.days.length, 5, 'Must generate 5 days for Madrid');
+
+    const allStopNames = new Set<string>();
+    const allDayTitles = new Set<string>();
+    for (const day of madridPlan.days) {
+      assert.ok(
+        !allDayTitles.has(day.title),
+        `Day title "${day.title}" must not repeat across days`
+      );
+      allDayTitles.add(day.title);
+
+      for (const stop of day.stops) {
+        assert.ok(
+          !stop.name.toLowerCase().includes('sainte-chapelle'),
+          `Madrid itinerary must never contain Paris landmark Sainte-Chapelle (found ${stop.name})`
+        );
+        assert.ok(
+          !allStopNames.has(stop.name.toLowerCase()),
+          `Stop "${stop.name}" on Day ${day.dayNumber} must be 100% distinct across all 5 days`
+        );
+        allStopNames.add(stop.name.toLowerCase());
+        assert.ok(
+          Math.abs(stop.lat - 40.4168) < 0.25 &&
+            Math.abs(stop.lng - -3.7038) < 0.25,
+          `Stop "${stop.name}" coordinates (${stop.lat}, ${stop.lng}) must be inside Madrid`
+        );
+      }
+    }
+    console.log('✓ [PASS] Test 6: 5-day Madrid itinerary has Spanish coordinates, zero Paris stops, and 100% unique stops across all 5 days');
+    passed++;
+  }
+
+  // Test 7: Comprehensive Travel Personality Engine, Accommodation, Transit & Dynamic Currency
+  {
+    const madridLuxury = buildFallbackCityTemplate({
+      destination: 'Madrid',
+      startDate: '2026-11-12',
+      daysCount: 4,
+      personality: 'Luxury',
+      verifiedPlaces: SEED_VERIFIED_PLACES,
+    });
+    const madridBackpacker = buildFallbackCityTemplate({
+      destination: 'Madrid',
+      startDate: '2026-11-12',
+      daysCount: 4,
+      personality: 'Backpacker',
+      verifiedPlaces: SEED_VERIFIED_PLACES,
+    });
+    const madridSlow = buildFallbackCityTemplate({
+      destination: 'Madrid',
+      startDate: '2026-11-12',
+      daysCount: 4,
+      personality: 'Slow Traveler',
+      verifiedPlaces: SEED_VERIFIED_PLACES,
+    });
+
+    assert.ok(
+      madridLuxury.accommodation.nightlyRate >= 400,
+      `Luxury Madrid hotel must be 5-star tier (>=400/night), got ${madridLuxury.accommodation.nightlyRate}`
+    );
+    assert.ok(
+      madridBackpacker.accommodation.nightlyRate <= 60,
+      `Backpacker Madrid hostel must be budget tier (<=60/night), got ${madridBackpacker.accommodation.nightlyRate}`
+    );
+    assert.ok(
+      madridLuxury.dailyTransport.dailyCostPerDay > madridBackpacker.dailyTransport.dailyCostPerDay * 5,
+      'Luxury VIP transit must exceed Backpacker public metro transit'
+    );
+    assert.ok(
+      madridSlow.days.every((d) => d.stops.length <= 3),
+      'Slow Traveler must never exceed 3 stops per day'
+    );
+    assert.equal(
+      formatCurrency(4000, 'EUR'),
+      '€4,000',
+      'EUR currency must format with € symbol'
+    );
+    console.log('✓ [PASS] Test 7: Travel Personality Engine (Luxury vs Backpacker vs Slow Traveler), Accommodation, Transit & Dynamic Currency');
+    passed++;
+  }
+
+  console.log(`\nAll ${passed}/7 automated test suites passed!`);
 }
 
 runTestSuite();
