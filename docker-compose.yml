@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  smart-trip-planner:
+    build: .
+    container_name: smart_trip_planner_app
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
