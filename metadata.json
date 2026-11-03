@@ -1,0 +1,6 @@
+{
+  "name": "Smart Trip Planner",
+  "description": "Tell it where. It plans the rest. AI-powered collaborative trip planner with schedule validation, interactive route maps, budget tracking, weather-grounded packing lists, and group compromise.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
